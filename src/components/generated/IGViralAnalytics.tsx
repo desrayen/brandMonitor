@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Activity, ArrowDown, ArrowUp, BarChart3, Eye, Heart, Info, Instagram, MessageCircle, MoreHorizontal, Repeat2, Sparkles, Split, Tag, Tags, TrendingUp, Users, Zap } from 'lucide-react';
+import { Activity, ArrowDown, Bot, ArrowUp, BarChart3, Eye, Heart, Info, Instagram, MessageCircle, MoreHorizontal, Repeat2, Sparkles, Split, Tag, Tags, TrendingUp, Users, Zap } from 'lucide-react';
 import { FilterBar, PostCategory } from './FilterBar';
 import { EChart } from '../charts/EChart';
+import { AgentChat } from '../agent/AgentChat';
 import { donutOption, hBarOption, lineOption, theme, vBarOption } from '../charts/options';
 type Metric = 'posts' | 'likes' | 'er';
 type SponsoredMetric = 'likes' | 'er' | 'views';
@@ -10,7 +11,7 @@ type SortKey = 'account' | 'posts' | 'followers' | 'likes' | 'er';
 type BrandSortKey = 'account' | 'followers' | 'sponsoredPosts';
 type BrandPerformanceSortKey = 'brandName' | 'productService' | 'category' | 'posts' | 'accountsUsed' | 'reach' | 'avgER' | 'avgLikes' | 'contentType';
 type Direction = 'asc' | 'desc';
-type TabKey = 'overview' | 'sponsored' | 'brand';
+type TabKey = 'overview' | 'sponsored' | 'brand' | 'agent';
 type ContentDatum = {
   name: Exclude<ContentType, 'All'>;
   posts: number;
@@ -1445,6 +1446,10 @@ const tabs: {
   key: 'brand',
   label: 'Brand Analytics',
   icon: Tags
+}, {
+  key: 'agent',
+  label: 'Agent',
+  icon: Bot
 }];
 const railItems: {
   label: string;
@@ -1470,6 +1475,11 @@ const railItems: {
   label: 'Brand',
   tab: 'brand',
   icon: Tag,
+  primary: true
+}, {
+  label: 'Agent',
+  tab: 'agent',
+  icon: Bot,
   primary: true
 }];
 function SectionHeading({
@@ -1947,6 +1957,7 @@ export function IGViralAnalytics() {
           })}</nav>
         <span className="theme-badge">22–24 Oct 2026 · 638 posts</span>
       </header>
+      {activeTab === 'agent' ? <AgentChat /> : <>
       <FilterBar dates={dates} setDates={setDates} brands={brands} setBrands={setBrands} type={filter} setType={setFilter} category={postCategory} setCategory={changeCategory} shown={shownCount} onReset={resetFilters} />
       {activeTab === 'overview' && brands.length > 0 && <p className="mt-4 mb-0 inline-flex items-center gap-1.5 rounded-md border border-[#27272a] bg-[#18181b] px-2.5 py-1 text-[12px] text-zinc-400"><span className="w-1.5 h-1.5 rounded-full bg-orange-500" /><span>Filtered: {brands.join(', ')}</span></p>}
       {shownCount === 0 ? <section className="flex flex-col items-center gap-3 py-24 text-center"><p className="m-0 text-[13px] text-zinc-600">No posts match the selected filters</p><button className="filter-chip" onClick={resetFilters}>Reset</button></section> : null}
@@ -1964,7 +1975,8 @@ export function IGViralAnalytics() {
         <aside className="panel insights-panel"><SectionHeading eyebrow="What matters" title="Key Insights" /><ol>{insights.map(([icon, text], index) => <li key={text}><span className="insight-number">{index + 1}</span><span className="insight-icon">{icon}</span><p>{text}</p></li>)}</ol></aside></section>
       <section className="panel posts-panel"><div className="posts-heading"><SectionHeading eyebrow="Leaderboard" title="Top Posts by Likes" /></div>{filteredPosts.length === 0 ? <div className="flex flex-col items-center gap-3 py-10"><p className="m-0 text-[13px] text-zinc-600">No posts match the selected filters</p><button className="filter-chip" onClick={resetFilters}>Reset</button></div> : null}<div className="post-list">{filteredPosts.map(post => <article className="post-row" key={post.rank}><span className="rank-badge">{post.rank}</span><div className="post-main"><div className="post-meta"><strong>@{post.account}</strong><span className="type-badge">{post.type}</span><span className="category-badge">{post.category}</span></div><p>{post.caption}</p></div><div className="post-metric"><strong>{fmt(post.likes)}</strong><span>likes</span></div><div className="post-metric"><strong>{fmt(post.comments)}</strong><span>comments</span></div><div className="post-metric er-metric"><strong>{post.er}%</strong><span>ER</span></div><button className="more-button" aria-label={`More options for post ${post.rank}`}><MoreHorizontal size={18} /></button></article>)}</div></section>
       </section>}
-      <footer className="footer-note"><span><Sparkles size={14} />Built for signal, not noise.</span><span>Data IG (HM) · Updated 24 Oct 2026</span></footer>
+      </>}
+      {activeTab !== 'agent' && <footer className="footer-note"><span><Sparkles size={14} />Built for signal, not noise.</span><span>Data IG (HM) · Updated 24 Oct 2026</span></footer>}
     </div>
   </main>;
 }
