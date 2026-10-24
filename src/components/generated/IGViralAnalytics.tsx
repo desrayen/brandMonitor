@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Activity, ArrowDown, ArrowUp, BarChart3, Eye, Heart, Info, Instagram, MessageCircle, MoreHorizontal, Repeat2, Sparkles, Split, Tag, Tags, TrendingUp, Users, Zap } from 'lucide-react';
 import { FilterBar, PostCategory } from './FilterBar';
+import { EChart } from '../charts/EChart';
+import { donutOption, hBarOption, lineOption, theme, vBarOption } from '../charts/options';
 type Metric = 'posts' | 'likes' | 'er';
 type SponsoredMetric = 'likes' | 'er' | 'views';
 type ContentType = 'All' | 'Reel' | 'Carousel' | 'Single Image';
@@ -1501,11 +1503,14 @@ function MiniBars({
   metric: Metric;
   onHover: (value: string | null) => void;
 }) {
-  const max = metric === 'posts' ? 325 : metric === 'likes' ? 7786 : 0.32;
-  return <div className="mini-bars">{data.map(item => <div className="bar-row" key={item.name} onMouseEnter={() => onHover(`${item.name}: ${fmt(item.posts)} posts · ${fmt(item.likes)} likes · ${item.er}% ER${item.views ? ` · ${fmt(item.views)} views` : ''}`)} onMouseLeave={() => onHover(null)}><span className="bar-label">{item.name}</span><span className="bar-track"><span className="bar-fill" style={{
-          width: `${Math.max(10, item[metric] / max * 100)}%`,
-          background: item.name === 'Reel' ? '#f97316' : item.name === 'Carousel' ? '#3b82f6' : '#a1a1aa'
-        }} /></span><strong>{metric === 'er' ? `${item.er}%` : fmt(item[metric])}</strong></div>)}</div>;
+  const option = useMemo(() => hBarOption({
+    data: data.map(item => ({ name: item.name, value: item[metric], color: item.name === 'Reel' ? theme.orange : item.name === 'Carousel' ? theme.blue : theme.muted })),
+    format: v => metric === 'er' ? `${v}%` : fmt(v),
+    labelWidth: 96,
+    valueWidth: 60,
+    tooltipText: i => { const item = data[i]; return `<b>${item.name}</b><br/>${fmt(item.posts)} posts · ${fmt(item.likes)} avg likes · ${item.er}% ER${item.views ? `<br/>${fmt(item.views)} avg views` : ''}`; },
+  }), [data, metric]);
+  return <EChart option={option} height={data.length * 34} ariaLabel="Content type performance bar chart" />;
 }
 function AnalyticsChart({
   title,
@@ -1527,12 +1532,13 @@ function AnalyticsChart({
   metric: Metric;
   setMetric: (value: Metric) => void;
 }) {
-  const [hover, setHover] = useState<string | null>(null);
-  const max = metric === 'posts' ? Math.max(...data.map(d => d.posts)) : metric === 'likes' ? Math.max(...data.map(d => d.likes)) : Math.max(...data.map(d => d.er));
-  return <section className="panel chart-panel"><div className="chart-head"><SectionHeading eyebrow={eyebrow} title={title} /><div className="toggle-group"><Toggle value="posts" active={metric} onClick={setMetric} /><Toggle value="likes" active={metric} onClick={setMetric} /><Toggle value="er" active={metric} onClick={setMetric} /></div></div><div className="horizontal-bars">{data.map((item, index) => <div className="h-bar-row" key={item.name} onMouseEnter={() => setHover(`${item.name} · ${fmt(item.posts)} posts · ${fmt(item.likes)} avg likes · ${item.er}% ER`)} onMouseLeave={() => setHover(null)}><span className="h-label">{item.name}</span><span className="h-track"><span className="h-fill" style={{
-            width: `${Math.max(5, item[metric] / max * 100)}%`,
-            background: colors[index % colors.length]
-          }} /></span><strong>{metric === 'er' ? `${item.er}%` : fmt(item[metric])}</strong></div>)}</div>{hover && <p className="chart-tooltip">{hover}</p>}</section>;
+  const option = useMemo(() => hBarOption({
+    data: data.map(item => ({ name: item.name, value: item[metric] })),
+    format: v => metric === 'er' ? `${v}%` : fmt(v),
+    labelWidth: 150,
+    tooltipText: i => `<b>${data[i].name}</b><br/>${fmt(data[i].posts)} posts · ${fmt(data[i].likes)} avg likes · ${data[i].er}% ER`,
+  }), [data, metric]);
+  return <section className="panel chart-panel"><div className="chart-head"><SectionHeading eyebrow={eyebrow} title={title} /><div className="toggle-group"><Toggle value="posts" active={metric} onClick={setMetric} /><Toggle value="likes" active={metric} onClick={setMetric} /><Toggle value="er" active={metric} onClick={setMetric} /></div></div><EChart option={option} height={data.length * 30} ariaLabel={`${title} bar chart`} /></section>;
 }
 const organicStats = {
   posts: 414,
@@ -1556,32 +1562,15 @@ function SponsoredBarGroup({
   metric: SponsoredMetric;
   setMetric: (value: SponsoredMetric) => void;
 }) {
-  const [hover, setHover] = useState<string | null>(null);
-  const organicValue = organicStats[metric];
-  const sponsoredValue = sponsoredStats[metric];
-  const max = Math.max(organicValue, sponsoredValue);
+  const labels: Record<SponsoredMetric, string> = { likes: 'Avg likes', er: 'Avg ER', views: 'Avg views' };
   const formatValue = (value: number) => metric === 'er' ? `${value}%` : fmt(value);
-  return <div>
-    <div className="flex items-end gap-10 h-[200px] px-2 pt-6 border-b border-white/10">
-      <div className="flex flex-col items-center gap-2 flex-1 h-full justify-end" onMouseEnter={() => setHover(`Organic: ${formatValue(organicValue)}`)} onMouseLeave={() => setHover(null)}>
-        <span className="text-xs font-semibold text-white">{formatValue(organicValue)}</span>
-        <div className="w-full max-w-[72px] rounded-t-lg transition-[height] duration-300" style={{
-          height: `${Math.max(6, organicValue / max * 150)}px`,
-          background: '#f97316'
-        }} />
-        <span className="text-[11px] text-slate-400 font-medium">Organic</span>
-      </div>
-      <div className="flex flex-col items-center gap-2 flex-1 h-full justify-end" onMouseEnter={() => setHover(`Sponsored: ${formatValue(sponsoredValue)}`)} onMouseLeave={() => setHover(null)}>
-        <span className="text-xs font-semibold text-white">{formatValue(sponsoredValue)}</span>
-        <div className="w-full max-w-[72px] rounded-t-lg transition-[height] duration-300" style={{
-          height: `${Math.max(6, sponsoredValue / max * 150)}px`,
-          background: '#3b82f6'
-        }} />
-        <span className="text-[11px] text-slate-400 font-medium">Sponsored</span>
-      </div>
-    </div>
-    {hover && <p className="chart-tooltip mt-4">{hover}</p>}
-  </div>;
+  const option = useMemo(() => vBarOption({
+    data: [{ name: 'Organic', value: organicStats[metric], color: theme.orange }, { name: 'Sponsored', value: sponsoredStats[metric], color: theme.blue }],
+    format: formatValue,
+    barMaxWidth: 72,
+    tooltipText: i => `${i === 0 ? 'Organic' : 'Sponsored'} · ${labels[metric]}<br/><b style="font-family:${theme.mono}">${formatValue(i === 0 ? organicStats[metric] : sponsoredStats[metric])}</b>`,
+  }), [metric]);
+  return <EChart option={option} height={220} ariaLabel="Organic vs sponsored comparison bar chart" />;
 }
 function BrandTable({
   brands
@@ -1717,13 +1706,7 @@ function SponsoredView({
         <SectionHeading eyebrow="Distribution" title="Post Volume Split" />
         <div className="flex flex-col items-center gap-5 mt-2">
           <div className="donut-wrap">
-            <svg viewBox="0 0 140 140" aria-label="Organic and sponsored post volume split">
-              <circle cx="70" cy="70" r="49" fill="none" stroke="rgba(255,255,255,.06)" strokeWidth="17" />
-              <circle cx="70" cy="70" r="49" fill="none" stroke="#f97316" strokeWidth="17" strokeDasharray={`${organicShare / 100 * 308 - 2} 308`} transform="rotate(-90 70 70)" />
-              <circle cx="70" cy="70" r="49" fill="none" stroke="#3b82f6" strokeWidth="17" strokeDasharray={`${sponsoredShare / 100 * 308 - 2} 308`} strokeDashoffset={`-${organicShare / 100 * 308}`} transform="rotate(-90 70 70)" />
-              <text x="70" y="65" textAnchor="middle" fill="#fafafa" fontSize="19" fontWeight="600" fontFamily="JetBrains Mono, monospace">638</text>
-              <text x="70" y="82" textAnchor="middle" fill="#71717a" fontSize="9">total posts</text>
-            </svg>
+            <EChart height={140} width={140} ariaLabel="Organic and sponsored post volume split" option={donutOption({ data: [{ name: 'Organic', value: organicStats.posts, color: theme.orange }, { name: 'Sponsored', value: sponsoredStats.posts, color: theme.blue }], centerValue: '638', centerLabel: 'total posts', format: v => `${fmt(v)} posts` })} />
           </div>
           <div className="w-full grid grid-cols-2 gap-3 text-center">
             <div>
@@ -1777,7 +1760,6 @@ function BrandAnalyticsView({
 }) {
   const [sortKey, setSortKey] = useState<BrandPerformanceSortKey>('posts');
   const [direction, setDirection] = useState<Direction>('desc');
-  const [reachHover, setReachHover] = useState<string | null>(null);
   const sortedBrandRows = useMemo(() => [...brandPerformanceData].sort((a, b) => {
     const left = sortKey === 'reach' ? a.reachValue : sortKey === 'avgER' ? a.avgERValue : sortKey === 'avgLikes' ? a.avgLikesValue : a[sortKey];
     const right = sortKey === 'reach' ? b.reachValue : sortKey === 'avgER' ? b.avgERValue : sortKey === 'avgLikes' ? b.avgLikesValue : b[sortKey];
@@ -1790,9 +1772,14 @@ function BrandAnalyticsView({
       setDirection('desc');
     }
   };
-  const donutTotal = brandCategoryBreakdown.reduce((sum, item) => sum + item.count, 0);
-  const donutCircumference = 308;
-  const maxReach = Math.max(...topBrandReachData.map(item => item.reachValue));
+  const brandDonut = useMemo(() => donutOption({ data: brandCategoryBreakdown.map(item => ({ name: item.name, value: item.count, color: item.color })), centerValue: '68', centerLabel: 'brand tags', format: v => `${v} brand tags` }), []);
+  const reachOption = useMemo(() => hBarOption({
+    data: topBrandReachData.map(item => ({ name: item.brandName, value: item.reachValue, color: item.color, label: item.reach })),
+    format: v => `~${v}M`,
+    labelWidth: 190,
+    valueWidth: 60,
+    tooltipText: i => { const item = topBrandReachData[i]; return `<b>${item.brandName}</b> <span style="color:${theme.subtle}">· ${item.category}</span><br/>${item.posts} posts · ${item.accounts}<br/><b style="font-family:${theme.mono}">${item.reach}</b> est. reach · ${item.product}`; },
+  }), []);
   return <section className="brand-analytics-view">
     <section className="panel brand-table-panel">
       <div className="brand-dashboard-heading">
@@ -1839,12 +1826,7 @@ function BrandAnalyticsView({
         <SectionHeading eyebrow="Category mix" title="Brands by Category" />
         <div className="brand-donut-layout">
           <div className="brand-donut-wrap">
-            <svg viewBox="0 0 140 140" aria-label="Brands by category donut chart">
-              <circle cx="70" cy="70" r="49" fill="none" stroke="rgba(255,255,255,.06)" strokeWidth="17" />
-              {brandCategoryBreakdown.map(item => <circle key={item.name} cx="70" cy="70" r="49" fill="none" stroke={item.color} strokeWidth="17" strokeDasharray={`${item.count / donutTotal * donutCircumference} ${donutCircumference}`} strokeDashoffset={`-${brandCategoryBreakdown.slice(0, brandCategoryBreakdown.findIndex(category => category.name === item.name)).reduce((sum, category) => sum + category.count / donutTotal * donutCircumference, 0)}`} transform="rotate(-90 70 70)" />)}
-              <text x="70" y="66" textAnchor="middle" fill="white" fontSize="20" fontWeight="700">68</text>
-              <text x="70" y="84" textAnchor="middle" fill="#64748b" fontSize="9">brand tags</text>
-            </svg>
+            <EChart height={160} width={160} ariaLabel="Brands by category donut chart" option={brandDonut} />
           </div>
           <ul className="brand-category-list">
             {brandCategoryBreakdown.map(item => <li key={item.name}>
@@ -1890,18 +1872,7 @@ function BrandAnalyticsView({
     </section>
     <section className="panel brand-reach-panel">
       <SectionHeading eyebrow="Audience potential" title="Top Brands by Estimated Total Reach" />
-      <div className="brand-reach-bars">
-        {topBrandReachData.map(item => <div className="brand-reach-row" key={item.brandName} onMouseEnter={() => setReachHover(`${item.brandName} · ${item.posts} posts · ${item.accounts} · ${item.reach} reach · ${item.product}`)} onMouseLeave={() => setReachHover(null)}>
-          <span className="reach-brand-label">{item.brandName}</span>
-          <span className="reach-bar-track"><span className="reach-bar-fill" style={{
-              width: `${Math.max(8, item.reachValue / maxReach * 100)}%`,
-              background: item.color
-            }} /></span>
-          <strong>{item.reach}</strong>
-          <span className="reach-category-label">{item.category}</span>
-        </div>)}
-      </div>
-      {reachHover && <p className="chart-tooltip brand-reach-tooltip">{reachHover}</p>}
+      <EChart option={reachOption} height={topBrandReachData.length * 32} ariaLabel="Top brands by estimated reach" />
     </section>
     <section className="brand-insight-grid">
       {brandInsights.map(insight => <article className="panel brand-insight-card" key={insight.title}>
@@ -1919,8 +1890,10 @@ export function IGViralAnalytics() {
   const [filter, setFilter] = useState<ContentType>('All');
   const [sortKey, setSortKey] = useState<SortKey>('posts');
   const [direction, setDirection] = useState<Direction>('desc');
-  const [shareHover, setShareHover] = useState<string | null>(null);
-  const [hourHover, setHourHover] = useState<number | null>(null);
+  const overviewDonut = useMemo(() => donutOption({ data: [{ name: 'Organic', value: 414, color: theme.orange }, { name: 'Sponsored', value: 224, color: theme.blue }], centerValue: '638', centerLabel: 'posts', format: v => `${fmt(v)} posts` }), []);
+  const shareOption = useMemo(() => hBarOption({ data: shareData.map((item, index) => ({ name: item.name, value: item.value, color: colors[index % colors.length] })), format: v => fmt(v), labelWidth: 150, tooltipText: i => `${shareData[i].name}<br/><b style="font-family:${theme.mono}">${shareData[i].value}</b> posts` }), []);
+  const hourLabels = hourData.map((_, index) => String(7 + index).padStart(2, '0'));
+  const hourOption = useMemo(() => lineOption({ labels: hourLabels, values: hourData, peakIndex: hourData.indexOf(Math.max(...hourData)), tooltipText: i => `${hourLabels[i]}:00 WIB<br/><b style="font-family:${theme.mono}">${hourData[i]}</b> posts` }), []);
   const [dates, setDates] = useState<string[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
   const [postCategory, setPostCategory] = useState<PostCategory>('All');
@@ -1954,8 +1927,6 @@ export function IGViralAnalytics() {
       setDirection('desc');
     }
   };
-  const points = hourData.map((value, index) => `${24 + index * 36},${118 - value * 1.28}`).join(' ');
-  const areaPoints = `24,118 ${points} 564,118`;
   return <main className="dashboard-shell">
     <aside className="side-rail" aria-label="Primary">
       <span className="instagram-mark"><Instagram size={15} /></span>
@@ -1983,14 +1954,11 @@ export function IGViralAnalytics() {
       {activeTab === 'brand' ? <BrandAnalyticsView brands={brands} /> : activeTab === 'sponsored' ? <SponsoredView brands={brands} /> : <section>
       <section className="charts-grid">
         <section className="panel content-performance"><div className="chart-head"><SectionHeading eyebrow="Format mix" title="Content Type Performance" /><div className="toggle-group"><Toggle value="posts" active={contentMetric} onClick={setContentMetric} /><Toggle value="likes" active={contentMetric} onClick={setContentMetric} /><Toggle value="er" active={contentMetric} onClick={setContentMetric} /></div></div><MiniBars data={contentData} metric={contentMetric} onHover={() => undefined} /><div className="legend-note"><span className="legend-dot purple" />Reel <span className="legend-dot cyan" />Carousel <span className="legend-dot indigo" />Single Image</div></section>
-        <section className="panel organic-panel"><SectionHeading eyebrow="Distribution" title="Organic vs Sponsored" /><div className="organic-layout"><div className="donut-wrap"><svg viewBox="0 0 140 140" aria-label="Organic and sponsored post split"><circle cx="70" cy="70" r="49" fill="none" stroke="rgba(255,255,255,.06)" strokeWidth="17" /><circle cx="70" cy="70" r="49" fill="none" stroke="#f97316" strokeWidth="17" strokeDasharray="197 309" transform="rotate(-90 70 70)" /><circle cx="70" cy="70" r="49" fill="none" stroke="#3b82f6" strokeWidth="17" strokeDasharray="106 309" strokeDashoffset="-200" transform="rotate(-90 70 70)" /><text x="70" y="67" textAnchor="middle" fill="#fafafa" fontSize="20" fontWeight="600" fontFamily="JetBrains Mono, monospace">638</text><text x="70" y="84" textAnchor="middle" fill="#71717a" fontSize="10">posts</text></svg></div><div className="organic-stats"><div><span className="stat-name"><i className="dot purple" />Organic</span><strong>414 <small>posts</small></strong><p>7,429 avg likes · <b>0.32%</b> ER</p></div><div><span className="stat-name"><i className="dot cyan" />Sponsored</span><strong>224 <small>posts</small></strong><p>445 avg likes · <b>0.05%</b> ER</p></div></div></div><div className="views-compare"><span>Avg views</span><b>227,122 <em>organic</em></b><b>29,391 <em className="cyan-text">sponsored</em></b></div></section>
+        <section className="panel organic-panel"><SectionHeading eyebrow="Distribution" title="Organic vs Sponsored" /><div className="organic-layout"><div className="donut-wrap"><EChart height={140} width={140} ariaLabel="Organic and sponsored post split" option={overviewDonut} /></div><div className="organic-stats"><div><span className="stat-name"><i className="dot purple" />Organic</span><strong>414 <small>posts</small></strong><p>7,429 avg likes · <b>0.32%</b> ER</p></div><div><span className="stat-name"><i className="dot cyan" />Sponsored</span><strong>224 <small>posts</small></strong><p>445 avg likes · <b>0.05%</b> ER</p></div></div></div><div className="views-compare"><span>Avg views</span><b>227,122 <em>organic</em></b><b>29,391 <em className="cyan-text">sponsored</em></b></div></section>
         <AnalyticsChart title="Viral Category Breakdown" eyebrow="Content taxonomy" data={categoryData} type="category" metric={categoryMetric} setMetric={setCategoryMetric} />
         <AnalyticsChart title="Primary Viral Trigger" eyebrow="Psychology" data={triggerData} type="trigger" metric={triggerMetric} setMetric={setTriggerMetric} />
-        <section className="panel share-panel"><SectionHeading eyebrow="Sharing behavior" title="Share Driver Distribution" /><div className="vertical-bars">{shareData.map((item, index) => <div className="v-bar-wrap" key={item.name} onMouseEnter={() => setShareHover(`${item.name}: ${item.value} posts`)} onMouseLeave={() => setShareHover(null)}><span className="v-value">{item.value}</span><span className="v-track"><span className="v-fill" style={{
-                    height: `${item.value / 263 * 100}%`,
-                    background: colors[index]
-                  }} /></span><small>{item.name}</small></div>)}</div>{shareHover && <p className="chart-tooltip share-tooltip">{shareHover}</p>}</section>
-        <section className="panel hours-panel"><SectionHeading eyebrow="Timing signal" title="Posting Hour Distribution (WIB)" action="Peak: 11:00" /><div className="line-chart"><span className="peak-band" /><span className="peak-label">Peak</span><svg viewBox="0 0 590 150" preserveAspectRatio="none" aria-label="Posting hour line chart"><line x1="24" y1="118" x2="564" y2="118" stroke="#27272a" /><line x1="24" y1="54" x2="564" y2="54" stroke="#27272a" strokeDasharray="3 5" /><polygon points={areaPoints} fill="url(#areaGradient)" /><polyline points={points} fill="none" stroke="#3b82f6" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" /><defs><linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#3b82f6" stopOpacity=".15" /><stop offset="1" stopColor="#3b82f6" stopOpacity="0" /></linearGradient></defs>{hourData.map((value, index) => <circle key={String(index)} cx={24 + index * 36} cy={118 - value * 1.28} r="3" fill="#18181b" stroke="#3b82f6" strokeWidth="1.5" onMouseEnter={() => setHourHover(index)} onMouseLeave={() => setHourHover(null)} />)}</svg>{hourHover !== null && <p className="chart-tooltip hour-tooltip">{String(7 + hourHover).padStart(2, '0')}:00 WIB · {hourData[hourHover]} posts</p>}<div className="x-labels">{hourData.map((_, index) => <span key={String(index)}>{String(7 + index).padStart(2, '0')}</span>)}</div></div></section>
+        <section className="panel share-panel"><SectionHeading eyebrow="Sharing behavior" title="Share Driver Distribution" /><EChart option={shareOption} height={shareData.length * 30} ariaLabel="Share driver distribution bar chart" /></section>
+        <section className="panel hours-panel"><SectionHeading eyebrow="Timing signal" title="Posting Hour Distribution (WIB)" action="Peak: 11:00" /><EChart option={hourOption} height={190} ariaLabel="Posting hour line chart" /></section>
       </section>
       <section className="lower-grid"><section className="panel accounts-panel"><SectionHeading eyebrow="Audience leaders" title="Top Accounts by Post Volume" action="10 accounts" /><div className="table-scroll"><table><thead><tr>{[['account', 'Account'], ['posts', 'Posts'], ['followers', 'Followers'], ['likes', 'Avg Likes'], ['er', 'Avg ER']].map(([key, label]) => <th key={key}><button onClick={() => sortAccounts(key as SortKey)}>{label}{sortKey === key && (direction === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}</button></th>)}</tr></thead><tbody>{sortedAccounts.map(account => <tr key={account.account}><td><span className="account-avatar">{account.account.slice(0, 1).toUpperCase()}</span>@{account.account}</td><td>{account.posts}</td><td>{account.followers}</td><td>{fmt(account.likes)}</td><td><span className={erClass(account.er)}>{account.er}%</span></td></tr>)}</tbody></table></div></section>
         <aside className="panel insights-panel"><SectionHeading eyebrow="What matters" title="Key Insights" /><ol>{insights.map(([icon, text], index) => <li key={text}><span className="insight-number">{index + 1}</span><span className="insight-icon">{icon}</span><p>{text}</p></li>)}</ol></aside></section>
