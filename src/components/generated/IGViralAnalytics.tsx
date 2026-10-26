@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ArrowDown, Bot, ArrowUp, BarChart3, ExternalLink, Info, Instagram, Loader2, MoreHorizontal, Sparkles, Split, Star, Tag, Tags, TrendingUp, Users } from 'lucide-react';
 import { FilterBar, PostCategory } from './FilterBar';
+import type { DateRange } from './DateRangePicker';
 import { EChart } from '../charts/EChart';
 import { AgentChat } from '../agent/AgentChat';
 import { donutOption, hBarOption, lineOption, theme, vBarOption } from '../charts/options';
@@ -588,12 +589,12 @@ export function IGViralAnalytics() {
   const [filter, setFilter] = useState<ContentType>('All');
   const [sortKey, setSortKey] = useState<SortKey>('posts');
   const [direction, setDirection] = useState<Direction>('desc');
-  const [dates, setDates] = useState<string[]>([]);
+  const [range, setRange] = useState<DateRange>(null);
   const [brands, setBrands] = useState<string[]>([]);
   const [postCategory, setPostCategory] = useState<PostCategory>('All');
   const [source, setSource] = useState<DataSource>('hm');
   const { data, error, reload } = useIgData(source);
-  const D = useMemo(() => data ? buildDashboard(data, { dates, brands, type: filter, category: postCategory }) : null, [data, dates, brands, filter, postCategory]);
+  const D = useMemo(() => data ? buildDashboard(data, { range, brands, type: filter, category: postCategory }) : null, [data, range, brands, filter, postCategory]);
   const overviewDonut = useMemo(() => D ? donutOption({ data: [{ name: 'Organic', value: D.organicStats.posts, color: theme.orange }, { name: 'Sponsored', value: D.sponsoredStats.posts, color: theme.blue }], centerValue: String(D.kpis.posts), centerLabel: 'posts', format: v => `${fmt(v)} posts` }) : null, [D]);
   const shareOption = useMemo(() => D ? hBarOption({ data: D.shareData.map((item, index) => ({ name: item.name, value: item.value, color: colors[index % colors.length] })), format: v => fmt(v), labelWidth: 150, tooltipText: i => `${D.shareData[i].name}<br/><b style="font-family:${theme.mono}">${D.shareData[i].value}</b> posts` }) : null, [D]);
   const hourLabels = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, '0'));
@@ -604,7 +605,7 @@ export function IGViralAnalytics() {
     if (value === 'Sponsored') setActiveTab('sponsored');
   };
   const resetFilters = () => {
-    setDates([]);
+    setRange(null);
     setBrands([]);
     setFilter('All');
     setPostCategory('All');
@@ -650,7 +651,7 @@ export function IGViralAnalytics() {
         <span className="theme-badge">{D ? `${D.rangeLabel} · ${fmt(D.total)} posts` : 'Loading…'}</span>
       </header>
       {activeTab === 'agent' ? <AgentChat /> : error ? <section className="flex flex-col items-center gap-3 py-24 text-center"><p className="m-0 text-[13px] text-zinc-400">Couldn't load data from Supabase: {error}</p><button className="filter-chip" onClick={reload}>Retry</button></section> : !D ? <section className="flex flex-col items-center gap-3 py-24 text-center"><Loader2 size={20} className="auth-spin" /><p className="m-0 text-[13px] text-zinc-500">Loading data from Supabase…</p></section> : <DashboardContext.Provider value={D}>
-      <FilterBar dates={dates} setDates={setDates} brands={brands} setBrands={setBrands} type={filter} setType={setFilter} category={postCategory} setCategory={changeCategory} shown={shownCount} total={D.total} dateOptions={D.dateOptions} brandOptions={D.brandOptions} onReset={resetFilters} />
+      <FilterBar range={range} setRange={setRange} brands={brands} setBrands={setBrands} type={filter} setType={setFilter} category={postCategory} setCategory={changeCategory} shown={shownCount} total={D.total} dateOptions={D.dateOptions} brandOptions={D.brandOptions} onReset={resetFilters} />
       {activeTab === 'overview' && brands.length > 0 && <p className="mt-4 mb-0 inline-flex items-center gap-1.5 rounded-md border border-[#27272a] bg-[#18181b] px-2.5 py-1 text-[12px] text-zinc-400"><span className="w-1.5 h-1.5 rounded-full bg-orange-500" /><span>Filtered: {brands.join(', ')}</span></p>}
       {shownCount === 0 ? <section className="flex flex-col items-center gap-3 py-24 text-center"><p className="m-0 text-[13px] text-zinc-600">No posts match the selected filters</p><button className="filter-chip" onClick={resetFilters}>Reset</button></section> : <>
       <section className="kpi-grid">{([['Total Posts', fmt(D.kpis.posts), '', 'blue'], ['Total Likes', fmt(D.kpis.likes), '', 'orange'], ['Total Comments', fmt(D.kpis.comments), '', 'orange'], ['Total Reposts', fmt(D.kpis.reposts), '', 'orange'], ['Reel Views', fmt(D.kpis.reelViews), `${fmt(D.kpis.reels)} reels`, 'blue'], ['Avg ER by followers', `${D.kpis.avgER}%`, `median ${D.kpis.medianER}%`, 'orange']] as const).map(([label, value, trend, tone]) => <article className={`kpi-card ${tone}`} key={label}><div className="kpi-label"><p>{label}</p><Info size={12} className="info-icon" /></div><strong>{value}</strong>{trend ? <span className="trend-chip">{trend}</span> : null}</article>)}</section>

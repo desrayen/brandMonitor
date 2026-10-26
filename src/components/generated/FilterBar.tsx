@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Calendar, Check, ChevronDown, Database, LayoutGrid, Tag, X } from 'lucide-react';
+import { DateRangePicker, type DateRange } from './DateRangePicker';
 export type PostType = 'All' | 'Reel' | 'Carousel' | 'Single Image';
 export type PostCategory = 'All' | 'Organic' | 'Sponsored';
 const typeOptions: {
@@ -27,8 +28,8 @@ const off = 'bg-[#18181b] border-[#27272a] text-zinc-300 hover:border-[#3f3f46]'
 const on = 'bg-[#f97316]/10 border-[#f97316]/40 text-orange-400';
 const label = 'inline-flex items-center gap-1.5 text-[12px] text-zinc-500 mr-1';
 type FilterBarProps = {
-  dates: string[];
-  setDates: (v: string[]) => void;
+  range: DateRange;
+  setRange: (v: DateRange) => void;
   brands: string[];
   setBrands: (v: string[]) => void;
   type: PostType;
@@ -42,8 +43,8 @@ type FilterBarProps = {
   onReset: () => void;
 };
 export function FilterBar({
-  dates,
-  setDates,
+  range,
+  setRange,
   brands,
   setBrands,
   type,
@@ -58,19 +59,14 @@ export function FilterBar({
 }: FilterBarProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const active = dates.length > 0 || brands.length > 0 || type !== 'All' || category !== 'All';
-  const toggleDate = (k: string) => {
-    const next = dates.includes(k) ? dates.filter(d => d !== k) : [...dates, k];
-    setDates(next.length === dateOptions.length ? [] : next);
-  };
+  const active = !!range || brands.length > 0 || type !== 'All' || category !== 'All';
   const toggleBrand = (b: string) => setBrands(brands.includes(b) ? brands.filter(x => x !== b) : [...brands, b]);
   const visibleBrands = brandOptions.filter(b => b.name.toLowerCase().includes(query.toLowerCase()));
   return <section className="-mx-6 max-[720px]:-mx-[14px] border-b border-[#27272a]" aria-label="Filters">
     <div className="flex flex-wrap items-center gap-2 px-6 py-3 max-[720px]:px-[14px]">
       <div className="flex flex-wrap items-center gap-2">
         <span className={label}><Calendar size={13} /><span>Publish Date</span></span>
-        {dateOptions.map(d => <button key={d.key} className={`${pill} ${dates.includes(d.key) ? on : off}`} onClick={() => toggleDate(d.key)}>{d.label}</button>)}
-        <button className={`${pill} ${dates.length === 0 ? on : off}`} onClick={() => setDates([])}>All Dates</button>
+        <DateRangePicker value={range} onChange={setRange} dataDays={dateOptions.map(d => d.key)} />
       </div>
       <span className="w-px h-5 bg-[#27272a] mx-1 max-md:hidden" />
       <div className="relative">
