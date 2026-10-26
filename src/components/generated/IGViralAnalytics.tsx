@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ArrowDown, Bot, ArrowUp, BarChart3, ExternalLink, Info, Instagram, Loader2, MoreHorizontal, Sparkles, Split, Star, Tag, Tags, TrendingUp, Users } from 'lucide-react';
+import { ArrowDown, Bot, ArrowUp, BarChart3, ExternalLink, Info, Instagram, Loader2, MoreHorizontal, CloudOff, RotateCw, Sparkles, Split, Star, Tag, Tags, TrendingUp, Users } from 'lucide-react';
 import { FilterBar, PostCategory } from './FilterBar';
 import type { DateRange } from './DateRangePicker';
 import { EChart } from '../charts/EChart';
@@ -485,7 +485,7 @@ function BrandAnalyticsView({
         <div>
           <p className="eyebrow">Brand performance</p>
           <h2>Sponsored Posts by Brand</h2>
-          <p>Brand attribution from brand_name · live from Supabase</p>
+          <p>Brands detected in sponsored posts</p>
         </div>
         <span className="brand-count-badge">{brandCount} attributed brands</span>
       </div>
@@ -581,6 +581,14 @@ function BrandAnalyticsView({
     </section>
   </section>;
 }
+function DashboardSkeleton({ label }: { label: string }) {
+  return <section className="dash-skeleton" aria-busy="true" aria-live="polite">
+    <p className="skeleton-caption"><span className="live-dot" />{label}</p>
+    <div className="skeleton-filters">{[180, 92, 64, 70, 84, 96].map((w, i) => <span key={i} className="skeleton" style={{ width: w, height: 32 }} />)}</div>
+    <div className="kpi-grid">{Array.from({ length: 6 }, (_, i) => <div key={i} className="kpi-card skeleton-card"><span className="skeleton" style={{ width: '55%', height: 10 }} /><span className="skeleton" style={{ width: '70%', height: 26, marginTop: 14 }} /></div>)}</div>
+    <div className="skeleton-panels">{Array.from({ length: 4 }, (_, i) => <div key={i} className="panel"><span className="skeleton" style={{ width: '40%', height: 12 }} />{Array.from({ length: 5 }, (_, j) => <span key={j} className="skeleton" style={{ width: `${90 - j * 12}%`, height: 10, marginTop: 16 }} />)}</div>)}</div>
+  </section>;
+}
 export function IGViralAnalytics() {
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [contentMetric, setContentMetric] = useState<Metric>('posts');
@@ -648,10 +656,10 @@ export function IGViralAnalytics() {
             const Icon = tab.icon;
             return <button key={tab.key} className={activeTab === tab.key ? 'tab-pill active' : 'tab-pill'} onClick={() => setActiveTab(tab.key)}><Icon size={14} /><span>{tab.label}</span></button>;
           })}</nav>
-        <span className="theme-badge">{D ? `${D.rangeLabel} · ${fmt(D.total)} posts` : 'Loading…'}</span>
+        <span className="theme-badge">{D ? `${D.rangeLabel} · ${fmt(D.total)} posts` : <span className="skeleton skeleton-badge" aria-hidden="true" />}</span>
       </header>
-      {activeTab === 'agent' ? <AgentChat /> : error ? <section className="flex flex-col items-center gap-3 py-24 text-center"><p className="m-0 text-[13px] text-zinc-400">Couldn't load data from Supabase: {error}</p><button className="filter-chip" onClick={reload}>Retry</button></section> : !D ? <section className="flex flex-col items-center gap-3 py-24 text-center"><Loader2 size={20} className="auth-spin" /><p className="m-0 text-[13px] text-zinc-500">Loading data from Supabase…</p></section> : <DashboardContext.Provider value={D}>
-      <FilterBar range={range} setRange={setRange} brands={brands} setBrands={setBrands} type={filter} setType={setFilter} category={postCategory} setCategory={changeCategory} shown={shownCount} total={D.total} dateOptions={D.dateOptions} brandOptions={D.brandOptions} onReset={resetFilters} />
+      {activeTab === 'agent' ? <AgentChat /> : error ? <section className="state-panel" role="alert"><span className="state-icon"><CloudOff size={20} /></span><h3>We couldn't load the dashboard</h3><p>Something went wrong while getting the latest posts. Check your connection and try again.</p><button className="state-btn" onClick={reload} title={error}><RotateCw size={14} />Try again</button></section> : !D ? <DashboardSkeleton label={`Getting the latest ${SOURCES[source].label} insights…`} /> : <DashboardContext.Provider value={D}>
+      <FilterBar updatedLabel={D.updatedLabel} range={range} setRange={setRange} brands={brands} setBrands={setBrands} type={filter} setType={setFilter} category={postCategory} setCategory={changeCategory} shown={shownCount} total={D.total} dateOptions={D.dateOptions} brandOptions={D.brandOptions} onReset={resetFilters} />
       {activeTab === 'overview' && brands.length > 0 && <p className="mt-4 mb-0 inline-flex items-center gap-1.5 rounded-md border border-[#27272a] bg-[#18181b] px-2.5 py-1 text-[12px] text-zinc-400"><span className="w-1.5 h-1.5 rounded-full bg-orange-500" /><span>Filtered: {brands.join(', ')}</span></p>}
       {shownCount === 0 ? <section className="flex flex-col items-center gap-3 py-24 text-center"><p className="m-0 text-[13px] text-zinc-600">No posts match the selected filters</p><button className="filter-chip" onClick={resetFilters}>Reset</button></section> : <>
       <section className="kpi-grid">{([['Total Posts', fmt(D.kpis.posts), '', 'blue'], ['Total Likes', fmt(D.kpis.likes), '', 'orange'], ['Total Comments', fmt(D.kpis.comments), '', 'orange'], ['Total Reposts', fmt(D.kpis.reposts), '', 'orange'], ['Reel Views', fmt(D.kpis.reelViews), `${fmt(D.kpis.reels)} reels`, 'blue'], ['Avg ER by followers', `${D.kpis.avgER}%`, `median ${D.kpis.medianER}%`, 'orange']] as const).map(([label, value, trend, tone]) => <article className={`kpi-card ${tone}`} key={label}><div className="kpi-label"><p>{label}</p><Info size={12} className="info-icon" /></div><strong>{value}</strong>{trend ? <span className="trend-chip">{trend}</span> : null}</article>)}</section>
@@ -670,7 +678,7 @@ export function IGViralAnalytics() {
       </section>}
       </>}
       </DashboardContext.Provider>}
-      {activeTab !== 'agent' && <footer className="footer-note"><span><Sparkles size={14} />Built for signal, not noise.</span><span>{SOURCES[source].footer} · Live from Supabase{D?.updatedLabel ? ` · Updated ${D.updatedLabel}` : ''}</span></footer>}
+      {activeTab !== 'agent' && <footer className="footer-note"><span><Sparkles size={14} />Built for signal, not noise.</span><span>{SOURCES[source].footer} · Live data{D?.updatedLabel ? ` · Updated ${D.updatedLabel}` : ''}</span></footer>}
     </div>
   </main>;
 }

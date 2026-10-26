@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Calendar, Check, ChevronDown, Database, LayoutGrid, Tag, X } from 'lucide-react';
+import { Calendar, Check, ChevronDown, LayoutGrid, Tag, X } from 'lucide-react';
 import { DateRangePicker, type DateRange } from './DateRangePicker';
 export type PostType = 'All' | 'Reel' | 'Carousel' | 'Single Image';
 export type PostCategory = 'All' | 'Organic' | 'Sponsored';
@@ -41,6 +41,7 @@ type FilterBarProps = {
   dateOptions: { key: string; label: string }[];
   brandOptions: { name: string }[];
   onReset: () => void;
+  updatedLabel?: string;
 };
 export function FilterBar({
   range,
@@ -55,7 +56,8 @@ export function FilterBar({
   total,
   dateOptions,
   brandOptions,
-  onReset
+  onReset,
+  updatedLabel
 }: FilterBarProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -92,8 +94,8 @@ export function FilterBar({
         {categoryOptions.map(c => <button key={c.key} className={`${pill} ${category === c.key ? on : off}`} onClick={() => setCategory(c.key)}>{c.key}</button>)}
       </div>
       <span className="group relative ml-auto inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg border border-[#27272a] bg-[#18181b] text-[11px] text-zinc-500 cursor-help" tabIndex={0}>
-        <Database size={12} /><span>Live · Supabase</span>
-        <span className="pointer-events-none invisible group-hover:visible group-focus:visible absolute right-0 top-9 z-50 w-64 rounded-lg border border-[#3f3f46] bg-[#27272a] p-2.5 text-[12px] leading-snug text-zinc-200">Data is loaded live from Supabase (ig_posts) after sign-in. Filters apply to every chart and table.</span>
+        <span className="live-dot" /><span>Live{updatedLabel ? ` · updated ${updatedLabel}` : ' data'}</span>
+        <span className="pointer-events-none invisible group-hover:visible group-focus:visible absolute right-0 top-9 z-50 w-64 rounded-lg border border-[#3f3f46] bg-[#27272a] p-2.5 text-[12px] leading-snug text-zinc-200">Numbers refresh every time new posts are added. Filters apply to every chart and table.</span>
       </span>
     </div>
     {active && <div className="flex items-center gap-2 px-6 pb-3 max-[720px]:px-[14px] text-[12px] text-zinc-400">
