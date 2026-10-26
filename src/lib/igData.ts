@@ -53,18 +53,28 @@ async function fetchAll<T>(table: string, columns: string): Promise<T[]> {
 
 export type RawData = { posts: IgPost[]; accounts: IgAccount[] };
 
-export function useIgData() {
+export type DataSource = 'hm' | 'kol';
+
+// Each dashboard dataset lives in its own pair of tables.
+export const SOURCES: Record<DataSource, { label: string; short: string; posts: string; accounts: string; footer: string }> = {
+  hm: { label: 'Homeless Media', short: 'HM', posts: 'ig_posts', accounts: 'accounts', footer: 'Data IG (HM)' },
+  kol: { label: 'KOL', short: 'KOL', posts: 'kol_posts', accounts: 'kol_accounts', footer: 'Data IG (KOL · Beauty, Health & Wellness)' },
+};
+
+export function useIgData(source: DataSource = 'hm') {
   const [data, setData] = useState<RawData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   useEffect(() => {
     let cancelled = false;
     setError(null);
-    Promise.all([fetchAll<IgPost>('ig_posts', POST_COLUMNS), fetchAll<IgAccount>('accounts', 'handle,followers')])
+    setData(null);
+    const src = SOURCES[source];
+    Promise.all([fetchAll<IgPost>(src.posts, POST_COLUMNS), fetchAll<IgAccount>(src.accounts, 'handle,followers')])
       .then(([posts, accounts]) => { if (!cancelled) setData({ posts, accounts }); })
       .catch(e => { if (!cancelled) setError(e?.message ?? String(e)); });
     return () => { cancelled = true; };
-  }, [reloadKey]);
+  }, [reloadKey, source]);
   return { data, error, reload: () => setReloadKey(k => k + 1) };
 }
 
