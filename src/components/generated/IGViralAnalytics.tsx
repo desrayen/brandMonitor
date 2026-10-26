@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import { ArrowDown, Bot, ArrowUp, BarChart3, ExternalLink, Info, Instagram, Loader2, MoreHorizontal, Sparkles, Split, Tag, Tags, TrendingUp, Users } from 'lucide-react';
+import { ArrowDown, Bot, ArrowUp, BarChart3, ExternalLink, Info, Instagram, Loader2, MoreHorizontal, Sparkles, Split, Star, Tag, Tags, TrendingUp, Users } from 'lucide-react';
 import { FilterBar, PostCategory } from './FilterBar';
 import { EChart } from '../charts/EChart';
 import { AgentChat } from '../agent/AgentChat';
 import { donutOption, hBarOption, lineOption, theme, vBarOption } from '../charts/options';
-import { buildDashboard, DashboardContext, useDash, useIgData } from '@/lib/igData';
+import { buildDashboard, DashboardContext, SOURCES, useDash, useIgData, type DataSource } from '@/lib/igData';
 type Metric = 'posts' | 'likes' | 'er';
 type SponsoredMetric = 'likes' | 'er' | 'views';
 type ContentType = 'All' | 'Reel' | 'Carousel' | 'Single Image';
@@ -591,7 +591,8 @@ export function IGViralAnalytics() {
   const [dates, setDates] = useState<string[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
   const [postCategory, setPostCategory] = useState<PostCategory>('All');
-  const { data, error, reload } = useIgData();
+  const [source, setSource] = useState<DataSource>('hm');
+  const { data, error, reload } = useIgData(source);
   const D = useMemo(() => data ? buildDashboard(data, { dates, brands, type: filter, category: postCategory }) : null, [data, dates, brands, filter, postCategory]);
   const overviewDonut = useMemo(() => D ? donutOption({ data: [{ name: 'Organic', value: D.organicStats.posts, color: theme.orange }, { name: 'Sponsored', value: D.sponsoredStats.posts, color: theme.blue }], centerValue: String(D.kpis.posts), centerLabel: 'posts', format: v => `${fmt(v)} posts` }) : null, [D]);
   const shareOption = useMemo(() => D ? hBarOption({ data: D.shareData.map((item, index) => ({ name: item.name, value: item.value, color: colors[index % colors.length] })), format: v => fmt(v), labelWidth: 150, tooltipText: i => `${D.shareData[i].name}<br/><b style="font-family:${theme.mono}">${D.shareData[i].value}</b> posts` }) : null, [D]);
@@ -620,22 +621,29 @@ export function IGViralAnalytics() {
       setDirection('desc');
     }
   };
+  const switchSource = (next: DataSource) => {
+    if (next === source) return;
+    resetFilters();
+    setSource(next);
+    if (activeTab === 'agent') setActiveTab('overview');
+  };
   const shownCount = D?.kpis.posts ?? 0;
   return <main className="dashboard-shell">
     <aside className="side-rail" aria-label="Primary">
       <span className="instagram-mark"><Instagram size={15} /></span>
       <nav className="rail-nav">
-        {railItems.map(item => {
+        {railItems.filter(item => source === 'hm' || item.tab !== 'agent').map(item => {
           const Icon = item.icon;
           return <button key={item.label} data-label={item.label} aria-label={item.label} className={activeTab === item.tab && item.primary ? 'rail-btn active' : 'rail-btn'} onClick={() => setActiveTab(item.tab)}><Icon size={18} /></button>;
         })}
       </nav>
-      <span className="rail-avatar">HM</span>
+      <button className="rail-avatar" title={`Switch to ${source === 'hm' ? SOURCES.kol.label : SOURCES.hm.label}`} onClick={() => switchSource(source === 'hm' ? 'kol' : 'hm')}>{SOURCES[source].short}</button>
     </aside>
     <div className="dashboard-container">
       <header className="top-header">
-        <p className="crumbs"><span>Analytics</span><span>›</span><strong>{tabs.find(t => t.key === activeTab)?.label}</strong></p>
-        <nav className="tab-nav" aria-label="Analytics sections">{tabs.map(tab => {
+        <p className="crumbs"><span>Analytics</span><span>›</span><span>{SOURCES[source].label}</span><span>›</span><strong>{tabs.find(t => t.key === activeTab)?.label}</strong></p>
+        <nav className="tab-nav source-nav" aria-label="Dataset">{(Object.keys(SOURCES) as DataSource[]).map(key => <button key={key} className={source === key ? 'tab-pill active' : 'tab-pill'} onClick={() => switchSource(key)}>{key === 'kol' ? <Star size={14} /> : <Users size={14} />}<span>{SOURCES[key].label}</span></button>)}</nav>
+        <nav className="tab-nav" aria-label="Analytics sections">{tabs.filter(tab => source === 'hm' || tab.key !== 'agent').map(tab => {
             const Icon = tab.icon;
             return <button key={tab.key} className={activeTab === tab.key ? 'tab-pill active' : 'tab-pill'} onClick={() => setActiveTab(tab.key)}><Icon size={14} /><span>{tab.label}</span></button>;
           })}</nav>
@@ -661,7 +669,7 @@ export function IGViralAnalytics() {
       </section>}
       </>}
       </DashboardContext.Provider>}
-      {activeTab !== 'agent' && <footer className="footer-note"><span><Sparkles size={14} />Built for signal, not noise.</span><span>Data IG (HM) · Live from Supabase{D?.updatedLabel ? ` · Updated ${D.updatedLabel}` : ''}</span></footer>}
+      {activeTab !== 'agent' && <footer className="footer-note"><span><Sparkles size={14} />Built for signal, not noise.</span><span>{SOURCES[source].footer} · Live from Supabase{D?.updatedLabel ? ` · Updated ${D.updatedLabel}` : ''}</span></footer>}
     </div>
   </main>;
 }
