@@ -27,6 +27,9 @@ button:focus-visible { outline: 2px solid rgba(249,115,22,.5); outline-offset: 2
 .crumbs { margin: 0; display: flex; gap: 8px; font-size: 14px; color: #a1a1aa; white-space: nowrap; }
 .crumbs strong { color: #fafafa; font-weight: 500; }
 .tab-nav { display: flex; align-items: stretch; height: 100%; margin-left: auto; overflow-x: auto; }
+.source-nav { margin-left: 0; padding-left: 12px; border-left: 1px solid #27272a; }
+button.rail-avatar { border: 0; cursor: pointer; }
+button.rail-avatar:hover { background: #3f3f46; color: #fafafa; }
 .tab-pill { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px; font-size: 14px; color: #71717a; background: transparent; cursor: pointer; }
 .tab-pill:hover { color: #d4d4d8; }
 .tab-pill.active { color: #fafafa; font-weight: 500; border-bottom-color: #f97316; }
@@ -169,7 +172,7 @@ td:first-child { color: #fafafa; font-family: Inter, sans-serif; font-size: 13px
 @media (max-width: 720px) {
   .dashboard-container { padding: 0 14px 40px; }
   .top-header { margin: 0 -14px; padding: 0 14px; gap: 10px; }
-  .theme-badge { display: none; } .tab-nav { margin-left: 0; }
+  .theme-badge { display: none; } .tab-nav { margin-left: 0; } .source-nav { padding-left: 0; border-left: 0; }
   .kpi-grid { display: flex; overflow-x: auto; margin-inline: -14px; padding-inline: 14px; }
   .kpi-card { min-width: 172px; }
   .content-performance, .organic-panel, .chart-panel, .share-panel, .hours-panel { grid-column: span 12; }
