@@ -321,3 +321,77 @@ td:first-child { color: #fafafa; font-family: Inter, sans-serif; font-size: 13px
 .state-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: rgba(249,115,22,.1); color: #fb923c; }
 .state-btn { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; height: 34px; padding: 0 14px; border-radius: 8px; border: 0; background: #f97316; color: #fff; font-size: 13px; font-weight: 500; cursor: pointer; }
 .state-btn:hover { background: #fb923c; }
+
+/* ---------- Threads Monitor ---------- */
+.threads-monitor { padding-top: 14px; }
+.threads-subnav { display: flex; gap: 6px; margin-bottom: 14px; }
+.threads-subnav button { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid #27272a; background: #18181b; color: #a1a1aa; font-size: 12.5px; cursor: pointer; }
+.threads-subnav button.active { color: #fb923c; border-color: rgba(249,115,22,.4); background: rgba(249,115,22,.1); }
+.threads-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid #27272a; }
+.threads-select { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 4px 0 10px; border-radius: 8px; border: 1px solid #27272a; background: #18181b; font-size: 12px; color: #71717a; }
+.threads-select select { height: 30px; max-width: 220px; border: 0; background: transparent; color: #fafafa; font-size: 12.5px; outline: none; cursor: pointer; }
+.threads-select select option { background: #18181b; }
+.threads-search { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid #27272a; background: #18181b; color: #71717a; }
+.threads-search input { width: 190px; border: 0; background: transparent; color: #fafafa; font-size: 12.5px; outline: none; }
+.threads-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 0; font-size: 12px; color: #a1a1aa; }
+.threads-meta code, .topic-kws code { padding: 1px 6px; border-radius: 5px; background: #27272a; color: #e4e4e7; font-size: 11.5px; }
+.topic-kws code.ex { background: rgba(239,68,68,.12); color: #fca5a5; }
+.threads-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+.thread-list, .reply-tree, .topic-list { list-style: none; margin: 0; padding: 0; }
+.thread-item { border-top: 1px solid #27272a; }
+.thread-item:first-child { border-top: 0; }
+.thread-item.open { background: rgba(255,255,255,.015); }
+.post-line { display: flex; gap: 6px; padding: 12px 0; }
+.post-toggle { flex: none; display: grid; place-items: start center; width: 22px; padding-top: 2px; border: 0; background: none; color: #a1a1aa; cursor: pointer; }
+.post-toggle:disabled { cursor: default; }
+.post-body { min-width: 0; flex: 1; }
+.post-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 12px; }
+.post-head strong { color: #fafafa; font-size: 13px; }
+.reply-to { display: inline-flex; align-items: center; gap: 3px; color: #fb923c; }
+.post-time { color: #71717a; }
+.kw-tag { padding: 1px 6px; border-radius: 999px; background: rgba(59,130,246,.12); color: #93c5fd; font-size: 10.5px; }
+.kw-tag.excluded { background: rgba(239,68,68,.12); color: #fca5a5; }
+.parent-quote { margin: 4px 0 0; padding-left: 8px; border-left: 2px solid #3f3f46; color: #71717a; font-size: 12px; }
+.post-text { margin: 6px 0 0; white-space: pre-wrap; word-break: break-word; color: #d4d4d8; font-size: 13px; line-height: 1.5; }
+.post-stats { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; color: #71717a; font-size: 12px; }
+.post-stats span, .post-stats a { display: inline-flex; align-items: center; gap: 4px; }
+.post-stats em { font-style: normal; color: #52525b; }
+.post-stats a { color: #a1a1aa; text-decoration: none; } .post-stats a:hover { color: #fb923c; }
+.reply-tree { border-left: 1px solid #27272a; padding-left: 10px; }
+.reply-tree .post-line { padding: 8px 0; }
+.reply-tree .post-toggle { display: none; }
+.threads-settings { display: grid; gap: 16px; }
+.health-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; font-size: 12.5px; }
+.health-row span { display: inline-flex; align-items: center; gap: 6px; }
+.health-row .ok { color: #4ade80; } .health-row .warn { color: #fbbf24; } .health-row .bad { color: #f87171; } .health-row .muted { color: #71717a; }
+.health-warn { display: flex; gap: 6px; margin: 12px 0 0; padding: 10px 12px; border-radius: 8px; background: rgba(251,191,36,.08); color: #fcd34d; font-size: 12.5px; line-height: 1.5; }
+.form-msg { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; font-size: 12.5px; }
+.form-msg.ok { background: rgba(34,197,94,.1); color: #86efac; } .form-msg.bad { background: rgba(239,68,68,.1); color: #fca5a5; }
+.topic-list li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding: 14px 0; border-top: 1px solid #27272a; }
+.topic-list li:first-child { border-top: 0; }
+.topic-list li.paused { opacity: .6; }
+.topic-main { min-width: 0; flex: 1 1 320px; }
+.topic-title { display: flex; align-items: center; gap: 8px; } .topic-title strong { color: #fafafa; font-size: 14px; }
+.topic-kws { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 6px; font-size: 12px; }
+.topic-meta { margin: 6px 0 0; color: #71717a; font-size: 12px; }
+.topic-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.status-pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-family: Inter, sans-serif; }
+.status-pill.on { background: rgba(34,197,94,.12); color: #86efac; } .status-pill.off { background: #27272a; color: #a1a1aa; }
+.status-pill.run { background: rgba(59,130,246,.12); color: #93c5fd; } .status-pill.bad { background: rgba(239,68,68,.12); color: #fca5a5; }
+.icon-btn { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 7px; border: 1px solid #27272a; background: #18181b; color: #a1a1aa; cursor: pointer; }
+.icon-btn:hover { color: #fafafa; border-color: #3f3f46; } .icon-btn.danger:hover { color: #f87171; border-color: rgba(239,68,68,.4); }
+.topic-form { display: grid; gap: 12px; margin-bottom: 16px; padding: 16px; border-radius: 10px; border: 1px solid #3f3f46; background: #09090b; }
+.topic-form h3 { margin: 0; font-size: 14px; color: #fafafa; }
+.topic-form label { display: grid; gap: 6px; font-size: 12px; color: #a1a1aa; }
+.topic-form input:not([type=checkbox]), .topic-form textarea, .topic-form select { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #3f3f46; background: #18181b; color: #fafafa; font-size: 13px; font-family: Inter, sans-serif; outline: none; }
+.topic-form input:focus, .topic-form textarea:focus, .topic-form select:focus { border-color: #f97316; }
+.topic-form small { color: #71717a; font-size: 11px; line-height: 1.4; }
+.topic-form label.check { display: flex; align-items: center; gap: 8px; color: #d4d4d8; align-self: end; padding-bottom: 8px; }
+.topic-form input[type=checkbox] { accent-color: #f97316; width: 15px; height: 15px; }
+@media (max-width: 720px) {
+  .threads-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .threads-search { flex: 1 1 100%; } .threads-search input { width: 100%; }
+  .threads-select { flex: 1 1 100%; } .threads-select select { max-width: none; flex: 1; }
+  .topic-actions { width: 100%; }
+}
+.kw-tag.reply { background: #27272a; color: #a1a1aa; }
