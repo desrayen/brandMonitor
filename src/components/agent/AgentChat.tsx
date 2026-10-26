@@ -139,9 +139,9 @@ export function AgentChat() {
       <div className="agent-composer-wrap">
         <div className="agent-composer">
           <div className="agent-composer-head">
-            <span className="agent-conn"><Database size={12} />Supabase connected</span>
+            <span className="agent-conn"><Database size={12} />Connected to your data</span>
             <span className="agent-dot" />
-            <span>Agent · 1 tool · Haiku 5.5</span>
+            <span>Data assistant</span>
           </div>
           <div className="agent-composer-box">
             <textarea ref={inputRef} rows={2} value={input} onChange={e => setInput(e.target.value)} onKeyDown={onKey} placeholder="Tanya apa saja tentang data…" disabled={busy} />
