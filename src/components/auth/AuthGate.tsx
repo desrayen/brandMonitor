@@ -30,7 +30,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return <div className="auth-screen"><Loader2 className="auth-spin" size={20} /></div>;
   }
   if (!isSupabaseConfigured) {
-    return <AuthCard title="Setup needed" subtitle="Supabase keys are missing. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY to the environment and redeploy." />;
+    return <AuthCard title="Almost there" subtitle="The dashboard isn't connected yet. Please contact your administrator to finish the setup." />;
   }
   if (!session || view === 'set-password') {
     if (view === 'set-password' && session) return <SetPasswordForm onDone={() => setView('login')} />;
