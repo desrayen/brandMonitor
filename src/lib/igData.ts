@@ -31,7 +31,7 @@ export type IgPost = {
 export type IgAccount = { handle: string; followers: number };
 
 export type Filters = {
-  dates: string[];
+  range: { start: string; end: string } | null;
   brands: string[];
   type: 'All' | ContentTypeName;
   category: 'All' | 'Organic' | 'Sponsored';
@@ -114,7 +114,7 @@ export function buildDashboard(raw: RawData, f: Filters) {
   const brandOptions = [...new Set(all.map(p => p.brand_name).filter((b): b is string => !!b))].sort((a, b) => a.localeCompare(b)).map(name => ({ name }));
 
   const posts = all.filter(p =>
-    (f.dates.length === 0 || f.dates.includes(wibDate(p.published_at))) &&
+    (!f.range || (wibDate(p.published_at) >= f.range.start && wibDate(p.published_at) <= f.range.end)) &&
     (f.type === 'All' || p.content_type === f.type) &&
     (f.category === 'All' || (f.category === 'Sponsored') === (p.post_category === 'Sponsored Post')) &&
     (f.brands.length === 0 || (!!p.brand_name && f.brands.includes(p.brand_name))));
