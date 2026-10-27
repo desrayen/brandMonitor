@@ -7,12 +7,12 @@ export const theme = {
   subtle: '#71717a',
   border: '#27272a',
   borderStrong: '#3f3f46',
-  card: '#18181b',
+  card: '#09090b',
   track: 'rgba(255,255,255,.04)',
-  orange: '#f97316',
-  blue: '#3b82f6',
+  orange: '#ff743d',
+  blue: '#2395ff',
   sans: 'Inter, system-ui, sans-serif',
-  mono: "'JetBrains Mono', ui-monospace, monospace",
+  mono: 'Inter, system-ui, sans-serif',
 };
 
 const tooltip = {
@@ -60,7 +60,7 @@ export function hBarOption({ data, format = String, tooltipText, labelWidth = 12
       type: 'bar', barWidth: 8, barMinHeight: 6,
       showBackground: true, backgroundStyle: { color: theme.track, borderRadius: 4 },
       itemStyle: { borderRadius: 4 },
-      emphasis: { focus: 'self', itemStyle: { shadowBlur: 10, shadowColor: 'rgba(249,115,22,.4)' } },
+      emphasis: { focus: 'self', itemStyle: { shadowBlur: 10, shadowColor: 'rgba(255,116,61,.4)' } },
       data: data.map(d => ({ value: d.value, itemStyle: { color: d.color ?? color } })),
     }],
   };
@@ -151,11 +151,11 @@ export function lineOption({ labels, values, peakIndex, tooltipText, color = the
       type: 'line', smooth: 0.3, symbol: 'circle', symbolSize: 6, showSymbol: true,
       lineStyle: { color, width: 2 },
       itemStyle: { color: theme.card, borderColor: color, borderWidth: 1.5 },
-      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(59,130,246,.25)' }, { offset: 1, color: 'rgba(59,130,246,0)' }] } },
+      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(35,149,255,.25)' }, { offset: 1, color: 'rgba(35,149,255,0)' }] } },
       emphasis: { scale: 1.6 },
       markArea: peakIndex === undefined ? undefined : {
         silent: true,
-        itemStyle: { color: 'rgba(249,115,22,.08)' },
+        itemStyle: { color: 'rgba(255,116,61,.08)' },
         label: { show: true, position: 'insideTop', color: theme.orange, fontSize: 10, formatter: 'Peak' },
         data: [[{ xAxis: labels[Math.max(0, peakIndex - 1)] }, { xAxis: labels[Math.min(labels.length - 1, peakIndex + 1)] }]],
       },
