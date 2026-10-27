@@ -94,7 +94,7 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 export const dateLabel = (d: string) => `${Number(d.slice(8, 10))} ${MONTHS[Number(d.slice(5, 7)) - 1]}`;
 const ratio = (a: number, b: number) => (b > 0 ? (a / b).toFixed(1) : '—');
 
-const PALETTE = ['#a855f7', '#22d3ee', '#818cf8', '#f97316', '#14b8a6', '#fb7185', '#facc15', '#a3e635'];
+const PALETTE = ['#a855f7', '#22d3ee', '#818cf8', '#ff743d', '#14b8a6', '#fb7185', '#facc15', '#a3e635'];
 
 function groupBy<T>(rows: T[], key: (r: T) => string | null | undefined) {
   const m = new Map<string, T[]>();
