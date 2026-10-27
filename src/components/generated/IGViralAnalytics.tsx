@@ -160,11 +160,6 @@ const railItems: {
   icon: BarChart3,
   primary: true
 }, {
-  label: 'Accounts',
-  tab: 'overview',
-  icon: Users,
-  primary: false
-}, {
   label: 'Sponsored',
   tab: 'sponsored',
   icon: TrendingUp,
