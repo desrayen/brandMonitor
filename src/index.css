@@ -167,6 +167,9 @@ td:first-child { color: #fafafa; font-family: Inter, sans-serif; font-size: 13px
 .brand-count-badge { color: #5aaeff; background: rgba(35,149,255,.15); border: 1px solid rgba(35,149,255,.3); border-radius: 6px; padding: 4px 10px; font-size: 11px; white-space: nowrap; }
 .brand-performance-table { min-width: 1180px; }
 .brand-performance-table td:first-child { min-width: 210px; font-family: Outfit, sans-serif; font-weight: 600; }
+.brand-name-cell { display: inline-flex; align-items: center; gap: 10px; }
+.brand-logo { width: 28px; height: 28px; flex: 0 0 28px; border-radius: 8px; object-fit: contain; background: #fff; border: 1px solid rgba(15, 23, 42, .08); padding: 2px; }
+.brand-logo-fallback { display: inline-flex; align-items: center; justify-content: center; padding: 0; background: rgba(255, 116, 61, .12); color: #ff743d; font-size: 10px; font-weight: 700; letter-spacing: .02em; }
 .brand-performance-table .brand-product-cell { color: #a1a1aa; font-family: Inter, sans-serif; min-width: 260px; white-space: normal; line-height: 1.35; }
 .brand-post-pill { color: #fafafa; font-size: 12px; }
 .brand-reach-pill { display: inline-flex; border-radius: 6px; color: #ff9466; background: rgba(255,116,61,.1); padding: 2px 8px; font-size: 12px; white-space: nowrap; }
