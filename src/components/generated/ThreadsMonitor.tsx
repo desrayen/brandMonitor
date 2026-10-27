@@ -1,33 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, CornerDownRight, Download, ExternalLink, Heart, Loader2, MessageCircle, Pencil, Play, Plus, Repeat2, Search, Settings2, Table2, Trash2, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, CornerDownRight, Crown, Download, ExternalLink, Heart, Loader2, MessageCircle, Network, Pencil, Play, Plus, Repeat2, Search, Settings2, Smile, Table2, Trash2, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { DateRangePicker, type DateRange } from './DateRangePicker';
 
-// ---------- types ----------
-type Topic = {
-  id: string; name: string; keywords: string[]; exclude_keywords: string[]; search_sort: 'recent' | 'top';
-  fetch_replies: boolean; max_items: number; interval_hours: number; active: boolean; last_run_at: string | null; created_at: string;
-};
-type Post = {
-  post_id: string; post_url: string | null; text: string | null; taken_at: string | null; username: string | null;
-  is_reply: boolean; parent_post_id: string | null; root_post_id: string | null; reply_to_username: string | null; parent_inferred: boolean;
-  like_count: number | null; reply_count: number | null; repost_count: number | null; quote_count: number | null; reshare_count: number | null; view_count: number | null;
-  lang: string | null; first_seen_at: string | null; last_seen_at: string | null;
-};
-type Row = Post & { keywords: string[]; excluded: boolean };
-type Run = { id: string; topic_id: string | null; action: string; targets: string[]; trigger: string; status: string; items_count: number | null; error: string | null; started_at: string; finished_at: string | null };
+import { type Topic, type Row, type Account, ago, fmt, fmtTime, wibDay, loadTopicRows, loadAccounts, polarity, polarityLabel } from './threadsShared';
+import { SentimentView, ClusterView, InfluenceView, AnalyticsFilters, useScope } from './ThreadsAnalytics';
 
+type Run = { id: string; topic_id: string | null; action: string; targets: string[]; trigger: string; status: string; items_count: number | null; error: string | null; started_at: string; finished_at: string | null };
 const FN = `${(import.meta.env.NEXT_PUBLIC_SUPABASE_URL ?? import.meta.env.VITE_SUPABASE_URL ?? '').replace(/\/$/, '')}/functions/v1/threads-monitor`;
-const POST_COLS = 'post_id,post_url,text,taken_at,username,is_reply,parent_post_id,root_post_id,reply_to_username,parent_inferred,like_count,reply_count,repost_count,quote_count,reshare_count,view_count,lang,first_seen_at,last_seen_at';
-const WIB = 7 * 3600e3;
-const wibDay = (iso: string) => new Date(Date.parse(iso) + WIB).toISOString().slice(0, 10);
-const fmtTime = (iso: string | null) => iso ? new Date(Date.parse(iso) + WIB).toISOString().replace('T', ' ').slice(0, 16) + ' WIB' : '—';
-const ago = (iso: string | null) => {
-  if (!iso) return 'never';
-  const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
-  return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`;
-};
-const fmt = (n: number | null | undefined) => (n ?? 0).toLocaleString('en-US');
 
 async function callFn(op: string, body: Record<string, unknown> = {}) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -55,62 +35,79 @@ function Heading({ title, action }: { title: string; action?: React.ReactNode })
 }
 
 // ---------- main ----------
+type Tab = 'data' | 'sentiment' | 'cluster' | 'influence' | 'settings';
 export function ThreadsMonitor() {
   const isAdmin = useIsSuperAdmin();
-  const [tab, setTab] = useState<'data' | 'settings'>('data');
+  const [tab, setTab] = useState<Tab>('data');
   const [topics, setTopics] = useState<Topic[] | null>(null);
+  const [topicId, setTopicId] = useState<string>('');
+  const [range, setRange] = useState<DateRange>(null);
+  const [rows, setRows] = useState<Row[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [accounts, setAccounts] = useState<Map<string, Account>>(new Map());
   const loadTopics = useCallback(async () => {
     const { data } = await supabase.from('threads_topics').select('*').order('created_at');
     setTopics((data ?? []) as Topic[]);
   }, []);
   useEffect(() => { loadTopics(); }, [loadTopics]);
+  useEffect(() => { loadAccounts().then(setAccounts).catch(() => setAccounts(new Map())); }, []);
+  useEffect(() => { if (topics && !topics.some(t => t.id === topicId)) setTopicId(topics[0]?.id ?? ''); }, [topics, topicId]);
+  useEffect(() => {
+    if (!topicId) return;
+    let cancelled = false;
+    setRows(null); setError(null);
+    loadTopicRows(topicId).then(r => { if (!cancelled) setRows(r); }).catch(e => { if (!cancelled) setError(e?.message ?? String(e)); });
+    return () => { cancelled = true; };
+  }, [topicId]);
 
+  const tabs: [Tab, string, React.ReactNode][] = [
+    ['data', 'Data', <Table2 size={14} />], ['sentiment', 'Sentiment', <Smile size={14} />], ['cluster', 'Cluster Node', <Network size={14} />], ['influence', 'Top Influence', <Crown size={14} />],
+    ...(isAdmin ? [['settings', 'Topics & collection', <Settings2 size={14} />] as [Tab, string, React.ReactNode]] : []),
+  ];
+  const shared = { topics, topicId, setTopicId, range, setRange, rows, error };
   return <section className="threads-monitor">
     <nav className="threads-subnav" aria-label="Threads monitor sections">
-      <button className={tab === 'data' ? 'active' : ''} onClick={() => setTab('data')}><Table2 size={14} />Data</button>
-      {isAdmin && <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}><Settings2 size={14} />Topics &amp; collection</button>}
+      {tabs.map(([k, label, icon]) => <button key={k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>{icon}{label}</button>)}
     </nav>
     {topics === null ? <div className="state-panel"><Loader2 size={18} className="auth-spin" /><p>Getting your topics…</p></div>
       : tab === 'settings' && isAdmin ? <TopicSettings topics={topics} reload={loadTopics} />
-      : <DataView topics={topics} isAdmin={isAdmin} goSettings={() => setTab('settings')} />}
+      : !topics.length ? <NoTopics isAdmin={isAdmin} goSettings={() => setTab('settings')} />
+      : tab === 'data' ? <DataView {...shared} topics={topics} />
+      : <Analytics tab={tab} {...shared} topics={topics} accounts={accounts} />}
   </section>;
 }
 
+function NoTopics({ isAdmin, goSettings }: { isAdmin: boolean; goSettings: () => void }) {
+  return <section className="state-panel"><span className="state-icon"><MessageCircle size={20} /></span><h3>No topics yet</h3><p>Add the keywords you want to monitor on Threads and the collection will start automatically.</p>{isAdmin ? <button className="state-btn" onClick={goSettings}><Plus size={14} />Add a topic</button> : <p>Ask an admin to add a topic.</p>}</section>;
+}
+
+type SharedProps = { topics: Topic[]; topicId: string; setTopicId: (id: string) => void; range: DateRange; setRange: (r: DateRange) => void; rows: Row[] | null; error: string | null };
+
+function Analytics({ tab, accounts, ...p }: SharedProps & { tab: Tab; accounts: Map<string, Account> }) {
+  const [relevantOnly, setRelevantOnly] = useState(true);
+  const [onlyId, setOnlyId] = useState(true);
+  const all = useMemo(() => p.rows ?? [], [p.rows]);
+  const scope = useScope(all, { range: p.range, relevantOnly, onlyId });
+  return <>
+    <AnalyticsFilters topics={p.topics} topicId={p.topicId} setTopicId={p.setTopicId} range={p.range} setRange={p.setRange} all={all} relevantOnly={relevantOnly} setRelevantOnly={setRelevantOnly} onlyId={onlyId} setOnlyId={setOnlyId} />
+    {p.error ? <section className="state-panel" role="alert"><h3>We couldn't load this topic</h3><p>Please try again in a moment.</p></section>
+      : p.rows === null ? <div className="state-panel"><Loader2 size={18} className="auth-spin" /><p>Getting the latest Threads conversations…</p></div>
+      : tab === 'sentiment' ? <SentimentView scope={scope} accounts={accounts} />
+      : tab === 'cluster' ? <ClusterView scope={scope} accounts={accounts} />
+      : <InfluenceView scope={scope} accounts={accounts} />}
+  </>;
+}
+
 // ---------- data tab ----------
-function DataView({ topics, isAdmin, goSettings }: { topics: Topic[]; isAdmin: boolean; goSettings: () => void }) {
-  const [topicId, setTopicId] = useState<string>(topics[0]?.id ?? '');
-  const [rows, setRows] = useState<Row[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [range, setRange] = useState<DateRange>(null);
+function DataView({ topics, topicId, setTopicId, range, setRange, rows, error }: SharedProps) {
   const [q, setQ] = useState('');
   const [kind, setKind] = useState<'threads' | 'all' | 'replies'>('threads');
   const [onlyId, setOnlyId] = useState(true);
   const [showExcluded, setShowExcluded] = useState(false);
+  const [sent, setSent] = useState<'all' | 'pos' | 'neu' | 'neg'>('all');
   const [open, setOpen] = useState<string | null>(null);
   const [limit, setLimit] = useState(50);
-
-  useEffect(() => { if (!topicId && topics[0]) setTopicId(topics[0].id); }, [topics, topicId]);
-  useEffect(() => {
-    if (!topicId) return;
-    let cancelled = false;
-    setRows(null); setError(null); setOpen(null); setLimit(50);
-    (async () => {
-      const map = new Map<string, Row>();
-      for (let from = 0; ; from += 1000) {
-        const { data, error } = await supabase.from('threads_post_topics').select(`keyword,excluded,threads_posts(${POST_COLS})`).eq('topic_id', topicId).range(from, from + 999);
-        if (error) throw error;
-        for (const l of (data ?? []) as unknown as { keyword: string; excluded: boolean; threads_posts: Post | null }[]) {
-          const p = l.threads_posts as Post; if (!p) continue;
-          const prev = map.get(p.post_id);
-          const kw = l.keyword === '__reply__' ? [] : [l.keyword];
-          map.set(p.post_id, prev ? { ...prev, keywords: [...new Set([...prev.keywords, ...kw])], excluded: prev.excluded && l.excluded } : { ...p, keywords: kw, excluded: l.excluded });
-        }
-        if (!data || data.length < 1000) break;
-      }
-      if (!cancelled) setRows([...map.values()]);
-    })().catch(e => { if (!cancelled) setError(e?.message ?? String(e)); });
-    return () => { cancelled = true; };
-  }, [topicId]);
+  useEffect(() => { setOpen(null); setLimit(50); }, [topicId]);
 
   const topic = topics.find(t => t.id === topicId);
   const all = useMemo(() => rows ?? [], [rows]);
@@ -130,9 +127,10 @@ function DataView({ topics, isAdmin, goSettings }: { topics: Topic[]; isAdmin: b
       (!onlyId || r.is_reply || r.lang !== 'other') &&
       (kind === 'all' || (kind === 'replies' ? r.is_reply : !r.is_reply || !r.root_post_id || !byId.has(r.root_post_id))) &&
       (!range || (r.taken_at && wibDay(r.taken_at) >= range.start && wibDay(r.taken_at) <= range.end)) &&
+      (sent === 'all' || polarity(r.sentiment_score) === sent) &&
       (!ql || (r.text ?? '').toLowerCase().includes(ql) || (r.username ?? '').toLowerCase().includes(ql)))
       .sort((a, b) => String(b.taken_at).localeCompare(String(a.taken_at)));
-  }, [all, q, kind, onlyId, showExcluded, range, byId]);
+  }, [all, q, kind, onlyId, showExcluded, range, byId, sent]);
 
   const scope = all.filter(r => (showExcluded || !r.excluded) && (!onlyId || r.is_reply || r.lang !== 'other') && (!range || (r.taken_at && wibDay(r.taken_at) >= range.start && wibDay(r.taken_at) <= range.end)));
   const kpis = {
@@ -143,7 +141,7 @@ function DataView({ topics, isAdmin, goSettings }: { topics: Topic[]; isAdmin: b
   };
 
   const exportCsv = () => {
-    const cols: (keyof Row)[] = ['post_id', 'taken_at', 'username', 'is_reply', 'root_post_id', 'parent_post_id', 'reply_to_username', 'parent_inferred', 'text', 'like_count', 'reply_count', 'repost_count', 'quote_count', 'reshare_count', 'view_count', 'lang', 'keywords', 'excluded', 'post_url', 'first_seen_at', 'last_seen_at'];
+    const cols: (keyof Row)[] = ['post_id', 'taken_at', 'username', 'is_reply', 'root_post_id', 'parent_post_id', 'reply_to_username', 'parent_inferred', 'text', 'sentiment_score', 'issue', 'sentiment_reason', 'relevant', 'like_count', 'reply_count', 'repost_count', 'quote_count', 'reshare_count', 'view_count', 'lang', 'keywords', 'excluded', 'post_url', 'first_seen_at', 'last_seen_at'];
     const esc = (v: unknown) => { const s = Array.isArray(v) ? v.join('; ') : v == null ? '' : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
     const csv = [cols.join(','), ...filtered.map(r => cols.map(c => esc(r[c])).join(','))].join('\n');
     const a = document.createElement('a');
@@ -151,8 +149,6 @@ function DataView({ topics, isAdmin, goSettings }: { topics: Topic[]; isAdmin: b
     a.download = `threads-${(topic?.name ?? 'topic').replace(/\W+/g, '-').toLowerCase()}-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click(); URL.revokeObjectURL(a.href);
   };
-
-  if (!topics.length) return <section className="state-panel"><span className="state-icon"><MessageCircle size={20} /></span><h3>No topics yet</h3><p>Add the keywords you want to monitor on Threads and the collection will start automatically.</p>{isAdmin ? <button className="state-btn" onClick={goSettings}><Plus size={14} />Add a topic</button> : <p>Ask an admin to add a topic.</p>}</section>;
 
   const pill = (on: boolean) => `filter-chip ${on ? 'active' : ''}`;
   return <>
@@ -167,6 +163,7 @@ function DataView({ topics, isAdmin, goSettings }: { topics: Topic[]; isAdmin: b
         <button className={pill(kind === 'replies')} onClick={() => setKind('replies')}>Replies</button>
         <button className={pill(kind === 'all')} onClick={() => setKind('all')}>All</button>
       </div>
+      <select className="sent-select" value={sent} onChange={e => setSent(e.target.value as typeof sent)} aria-label="Sentiment"><option value="all">All sentiment</option><option value="pos">Positive</option><option value="neu">Neutral</option><option value="neg">Negative</option></select>
       <button className={pill(onlyId)} onClick={() => setOnlyId(!onlyId)} title="Hide top-level posts detected as non-Indonesian">🇮🇩 Indonesian only</button>
       <button className={pill(showExcluded)} onClick={() => setShowExcluded(!showExcluded)} title="Show posts matching exclude keywords">Show excluded</button>
       <button className="filter-chip ml-auto inline-flex items-center gap-1.5" onClick={exportCsv} disabled={!filtered.length}><Download size={13} />Export CSV</button>
@@ -209,6 +206,7 @@ function PostLine({ r, toggle, open, replies, parent }: { r: Row; toggle?: () =>
         {r.excluded && <span className="kw-tag excluded">excluded</span>}
         {r.lang === 'other' && !r.is_reply && <span className="kw-tag">non-ID</span>}
         {r.is_reply && !r.reply_to_username && <span className="kw-tag reply">reply · thread not collected</span>}
+        <SentBadge r={r} />
       </div>
       {parent && <p className="parent-quote">↪ {parent.text?.slice(0, 120)}</p>}
       <p className="post-text">{r.text}</p>
@@ -220,6 +218,13 @@ function PostLine({ r, toggle, open, replies, parent }: { r: Row; toggle?: () =>
       </div>
     </div>
   </div>;
+}
+
+export function SentBadge({ r }: { r: Pick<Row, 'sentiment_score' | 'sentiment_reason' | 'issue' | 'relevant'> }) {
+  const p = polarity(r.sentiment_score);
+  if (!p) return <span className="sent-badge pending" title="Sentiment is scored automatically a few minutes after collection">scoring…</span>;
+  const s = r.sentiment_score!;
+  return <span className={`sent-badge ${p}`} title={[`${polarityLabel[p]} (${s > 0 ? '+' : ''}${s} on a −10…+10 scale)`, r.issue, r.sentiment_reason, r.relevant === false ? 'Marked off-topic' : null].filter(Boolean).join(' · ')}>{s > 0 ? '+' : ''}{s}{r.relevant === false && <em>off-topic</em>}</span>;
 }
 
 function ReplyTree({ parentId, childrenOf, depth }: { parentId: string; childrenOf: Map<string, Row[]>; depth: number }) {
@@ -239,7 +244,7 @@ function TopicSettings({ topics, reload }: { topics: Topic[]; reload: () => Prom
   const [form, setForm] = useState(emptyForm);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [status, setStatus] = useState<{ apify_token: boolean; threads_cookies: boolean; runs: Run[] } | null>(null);
+  const [status, setStatus] = useState<{ apify_token: boolean; threads_cookies: boolean; anthropic?: boolean; unscored?: number; runs: Run[] } | null>(null);
 
   const loadStatus = useCallback(() => { callFn('status').then(setStatus).catch(() => setStatus(null)); }, []);
   useEffect(() => { loadStatus(); const t = setInterval(loadStatus, 20000); return () => clearInterval(t); }, [loadStatus]);
@@ -281,7 +286,8 @@ function TopicSettings({ topics, reload }: { topics: Topic[]; reload: () => Prom
       <div className="health-row">
         <span className={status?.apify_token ? 'ok' : 'bad'}>{status?.apify_token ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}Apify connection</span>
         <span className={status?.threads_cookies ? 'ok' : 'warn'}>{status?.threads_cookies ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}Indonesian Threads session</span>
-        <span className="muted">Runs automatically every hour; each topic is collected at its own interval.</span>
+        <span className={status?.anthropic === false ? 'bad' : 'ok'}>{status?.anthropic === false ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}Sentiment scoring{status?.unscored ? ` · ${fmt(status.unscored)} waiting` : ' · up to date'}</span>
+        <span className="muted">Runs automatically every hour; each topic is collected at its own interval. New posts are scored every few minutes.</span>
       </div>
       {recentFails.length > 0 && <p className="health-warn"><AlertTriangle size={13} />{recentFails.length} of the last {status!.runs.length} collection runs failed. If this keeps happening, the Threads session cookie has probably expired — export new cookies and update the <code>THREADS_COOKIE</code> secret.</p>}
     </section>
@@ -313,8 +319,8 @@ function TopicSettings({ topics, reload }: { topics: Topic[]; reload: () => Prom
       <div className="table-scroll"><table>
         <thead><tr><th>Started</th><th>Topic</th><th>Type</th><th>Target</th><th>Status</th><th>Items</th></tr></thead>
         <tbody>{(status?.runs ?? []).map(r => <tr key={r.id}>
-          <td>{fmtTime(r.started_at)}</td><td>{topicName(r.topic_id)}</td><td>{r.action === 'search' ? 'Keyword search' : 'Replies'}</td>
-          <td className="max-w-[260px] truncate" title={r.targets.join(', ')}>{r.action === 'search' ? r.targets.join(', ') : r.targets[0]?.replace(/^https?:\/\/www\.threads\.(net|com)\//, '')}</td>
+          <td>{fmtTime(r.started_at)}</td><td>{topicName(r.topic_id)}</td><td>{r.action === 'search' ? 'Keyword search' : r.action === 'profile' ? 'Follower counts' : 'Replies'}</td>
+          <td className="max-w-[260px] truncate" title={r.targets.join(', ')}>{r.action === 'search' ? r.targets.join(', ') : r.action === 'profile' ? `${r.targets.length} accounts` : r.targets[0]?.replace(/^https?:\/\/www\.threads\.(net|com)\//, '')}</td>
           <td><span className={`status-pill ${r.status === 'succeeded' ? 'on' : r.status === 'running' || r.status === 'starting' ? 'run' : 'bad'}`} title={r.error ?? ''}>{r.status}</span></td>
           <td>{r.items_count ?? '…'}</td>
         </tr>)}</tbody>
