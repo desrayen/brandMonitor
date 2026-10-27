@@ -448,6 +448,13 @@ function SponsoredView({
     </section>
   </section>;
 }
+function BrandLogo({ name, url }: { name: string; url: string | null }) {
+  const [broken, setBroken] = useState(false);
+  const initials = name.replace(/\(.*?\)/g, '').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+  if (url && !broken) return <img className="brand-logo" src={url} alt="" loading="lazy" onError={() => setBroken(true)} />;
+  return <span className="brand-logo brand-logo-fallback" aria-hidden="true">{initials}</span>;
+}
+
 function BrandAnalyticsView({
   brands
 }: {
@@ -503,7 +510,7 @@ function BrandAnalyticsView({
               background: 'rgba(255,116,61,.1)',
               boxShadow: 'inset 2px 0 0 #ff743d'
             } : undefined}>
-              <td><strong>{row.brandName}</strong></td>
+              <td><span className="brand-name-cell"><BrandLogo name={row.brandName} url={row.logoUrl} /><strong>{row.brandName}</strong></span></td>
               <td className="brand-product-cell">{row.productService}</td>
               <td><span className="category-badge">{row.category}</span></td>
               <td><span className="brand-post-pill">{row.posts}</span></td>
