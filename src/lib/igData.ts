@@ -51,7 +51,15 @@ async function fetchAll<T>(table: string, columns: string): Promise<T[]> {
   return out;
 }
 
-export type RawData = { posts: IgPost[]; accounts: IgAccount[] };
+export type RawData = { posts: IgPost[]; accounts: IgAccount[]; logos: Record<string, string> };
+
+// Brand icons (brands.logo_url, filled by the brand-logo-sync edge function). Optional: never blocks the dashboard.
+async function fetchLogos(): Promise<Record<string, string>> {
+  try {
+    const rows = await fetchAll<{ name: string; logo_url: string | null }>('brands', 'name,logo_url');
+    return Object.fromEntries(rows.filter(r => r.logo_url).map(r => [r.name, r.logo_url as string]));
+  } catch { return {}; }
+}
 
 export type DataSource = 'hm' | 'kol';
 
@@ -70,8 +78,8 @@ export function useIgData(source: DataSource = 'hm') {
     setError(null);
     setData(null);
     const src = SOURCES[source];
-    Promise.all([fetchAll<IgPost>(src.posts, POST_COLUMNS), fetchAll<IgAccount>(src.accounts, 'handle,followers')])
-      .then(([posts, accounts]) => { if (!cancelled) setData({ posts, accounts }); })
+    Promise.all([fetchAll<IgPost>(src.posts, POST_COLUMNS), fetchAll<IgAccount>(src.accounts, 'handle,followers'), fetchLogos()])
+      .then(([posts, accounts, logos]) => { if (!cancelled) setData({ posts, accounts, logos }); })
       .catch(e => { if (!cancelled) setError(e?.message ?? String(e)); });
     return () => { cancelled = true; };
   }, [reloadKey, source]);
@@ -171,7 +179,7 @@ export function buildDashboard(raw: RawData, f: Filters) {
     const likesValue = avg(rows.map(r => r.likes));
     const hasEr = rows.some(r => r.er_by_followers != null);
     return {
-      brandName, productService: mode(rows.map(r => r.product_name)), category: mode(rows.map(r => r.product_type)), posts: rows.length,
+      brandName, logoUrl: raw.logos[brandName] ?? null, productService: mode(rows.map(r => r.product_name)), category: mode(rows.map(r => r.product_type)), posts: rows.length,
       accountsUsed: [...new Set(rows.map(r => r.account_handle))].join(', '),
       reach: `~${compact(reachValue)}`, reachValue,
       avgER: hasEr ? `${r2(erValue)}%` : 'hidden', avgERValue: hasEr ? erValue : -1,
