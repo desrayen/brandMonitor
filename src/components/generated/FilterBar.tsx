@@ -25,7 +25,7 @@ const categoryOptions: {
 }];
 const pill = 'inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border text-[12px] whitespace-nowrap cursor-pointer';
 const off = 'bg-[#18181b] border-[#27272a] text-zinc-300 hover:border-[#3f3f46]';
-const on = 'bg-[#f97316]/10 border-[#f97316]/40 text-orange-400';
+const on = 'bg-[#ff743d]/10 border-[#ff743d]/40 text-orange-400';
 const label = 'inline-flex items-center gap-1.5 text-[12px] text-zinc-500 mr-1';
 type FilterBarProps = {
   range: DateRange;

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, CornerDownRight, Crown, Download, ExternalLink, Heart, Loader2, MessageCircle, Network, Pencil, Play, Plus, Repeat2, Search, Settings2, Smile, Table2, Trash2, X } from 'lucide-react';
+import { AtSign, Users, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, CornerDownRight, Crown, Download, ExternalLink, Heart, Loader2, MessageCircle, Network, Pencil, Play, Plus, Repeat2, Search, Settings2, Smile, Table2, Trash2, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { DateRangePicker, type DateRange } from './DateRangePicker';
+import { StatCard } from '../StatCard';
 
 import { type Topic, type Row, type Account, ago, fmt, fmtTime, wibDay, loadTopicRows, loadAccounts, polarity, polarityLabel } from './threadsShared';
 import { SentimentView, ClusterView, InfluenceView, AnalyticsFilters, useScope } from './ThreadsAnalytics';
@@ -174,7 +175,10 @@ function DataView({ topics, topicId, setTopicId, range, setRange, rows, error }:
       : rows === null ? <div className="state-panel"><Loader2 size={18} className="auth-spin" /><p>Getting the latest Threads conversations…</p></div>
       : <>
         <section className="kpi-grid threads-kpis">
-          {([['Threads', kpis.threads, 'blue'], ['Replies', kpis.replies, 'orange'], ['Unique accounts', kpis.accounts, 'orange'], ['Total likes', kpis.likes, 'orange']] as const).map(([l, v, tone]) => <article key={l} className={`kpi-card ${tone}`}><div className="kpi-label"><p>{l}</p></div><strong>{fmt(v)}</strong></article>)}
+          <StatCard icon={<AtSign />} label="Threads" value={fmt(kpis.threads)} tint="brand" />
+          <StatCard icon={<MessageCircle />} label="Replies" value={fmt(kpis.replies)} tint="info" />
+          <StatCard icon={<Users />} label="Unique accounts" value={fmt(kpis.accounts)} />
+          <StatCard icon={<Heart />} label="Total likes" value={fmt(kpis.likes)} />
         </section>
         <section className="panel">
           <Heading title={`${fmt(filtered.length)} ${kind === 'replies' ? 'replies' : kind === 'all' ? 'posts & replies' : 'threads'}`} action={<span className="muted-action">Newest first · click a thread to see who replied to whom</span>} />

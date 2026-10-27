@@ -69,7 +69,7 @@ function Month({ year, month, start, end, hover, today, dataDays, onPick, onHove
         const inRange = !!lo && !!hi && k >= lo && k <= hi;
         const edge = k === lo || k === hi;
         return <button key={k} data-day={k} disabled={future} onClick={() => onPick(k)} onMouseEnter={() => onHover(k)} onMouseLeave={() => onHover(null)}
-          className={`relative h-8 border-0 text-[12px] ${future ? 'text-zinc-700 cursor-default bg-transparent' : 'cursor-pointer text-zinc-200'} ${inRange && !edge ? 'bg-[#f97316]/15' : 'bg-transparent'}`}>
+          className={`relative h-8 border-0 text-[12px] ${future ? 'text-zinc-700 cursor-default bg-transparent' : 'cursor-pointer text-zinc-200'} ${inRange && !edge ? 'bg-[#ff743d]/15' : 'bg-transparent'}`}>
           <span className={`mx-auto grid place-items-center w-8 h-8 rounded-full ${edge ? 'bg-orange-500 text-white font-semibold' : k === today ? 'ring-1 ring-orange-500/70' : !future ? 'hover:bg-[#27272a]' : ''}`}>{Number(k.slice(8))}</span>
           {dataDays.has(k) && !edge && <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-orange-500/80" />}
         </button>;
@@ -154,7 +154,7 @@ export function DateRangePicker({ value, onChange, dataDays }: { value: DateRang
   const shown = value ?? { ...allRange, preset: 'all' as PresetKey };
   return <div className="relative" ref={wrap}>
     <button onClick={() => setOpen(!open)} aria-expanded={open}
-      className={`inline-flex items-center gap-2 h-8 pl-1.5 pr-2.5 rounded-lg border text-[12px] whitespace-nowrap cursor-pointer ${value ? 'bg-[#f97316]/10 border-[#f97316]/40' : 'bg-[#18181b] border-[#27272a] hover:border-[#3f3f46]'}`}>
+      className={`inline-flex items-center gap-2 h-8 pl-1.5 pr-2.5 rounded-lg border text-[12px] whitespace-nowrap cursor-pointer ${value ? 'bg-[#ff743d]/10 border-[#ff743d]/40' : 'bg-[#18181b] border-[#27272a] hover:border-[#3f3f46]'}`}>
       <span className={`inline-flex items-center gap-1 h-6 px-2 rounded-md text-[11px] font-medium ${value ? 'bg-orange-500/20 text-orange-300' : 'bg-[#27272a] text-zinc-300'}`}><Calendar size={12} />{rangeLabel(value)}</span>
       <span className="text-zinc-200">{fmtRange(shown.start, shown.end)}</span>
       <ChevronDown size={13} className="text-zinc-500" />
@@ -162,7 +162,7 @@ export function DateRangePicker({ value, onChange, dataDays }: { value: DateRang
     {open && <div className="absolute left-0 top-10 z-50 flex max-w-[calc(100vw-28px)] overflow-hidden rounded-xl border border-[#27272a] bg-[#18181b] shadow-2xl shadow-black/60 max-sm:flex-col" role="dialog" aria-label="Choose date range">
       <ul className="m-0 w-[210px] max-sm:w-full max-h-[440px] max-sm:max-h-[170px] overflow-y-auto list-none p-1.5 border-r border-[#27272a] max-sm:border-r-0 max-sm:border-b">
         {PRESETS.map((p, i) => <li key={p.key} className={i === 2 ? 'mt-1 pt-1 border-t border-[#27272a]' : ''}>
-          <button onClick={() => choosePreset(p.key)} className={`w-full text-left px-3 py-2 rounded-md border-0 text-[12.5px] cursor-pointer ${preset === p.key ? 'bg-[#f97316]/12 text-orange-400 font-medium' : 'bg-transparent text-zinc-300 hover:bg-[#27272a]'}`}>{p.label}</button>
+          <button onClick={() => choosePreset(p.key)} className={`w-full text-left px-3 py-2 rounded-md border-0 text-[12.5px] cursor-pointer ${preset === p.key ? 'bg-[#ff743d]/12 text-orange-400 font-medium' : 'bg-transparent text-zinc-300 hover:bg-[#27272a]'}`}>{p.label}</button>
         </li>)}
       </ul>
       <div className="flex flex-col w-[300px] max-sm:w-full">

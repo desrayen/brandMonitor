@@ -33,7 +33,7 @@ export const compact = (n: number | null | undefined) => {
 };
 
 // ---------- sentiment ----------
-export const SENT = { pos: '#34d399', neu: '#60a5fa', neg: '#f87171' } as const;
+export const SENT = { pos: '#4bde81', neu: '#2395ff', neg: '#f62c1e' } as const;
 export type Polarity = 'pos' | 'neu' | 'neg';
 export const polarity = (s: number | null | undefined): Polarity | null => s == null ? null : s > 0 ? 'pos' : s < 0 ? 'neg' : 'neu';
 export const polarityLabel: Record<Polarity, string> = { pos: 'Positive', neu: 'Neutral', neg: 'Negative' };

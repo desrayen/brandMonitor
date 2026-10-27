@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
-import { ArrowDown, Bot, ArrowUp, BarChart3, ExternalLink, Info, Instagram, Loader2, MoreHorizontal, CloudOff, RotateCw, Sparkles, Split, Star, Tag, AtSign, Tags, TrendingUp, Users } from 'lucide-react';
+import { Activity, Heart, LayoutGrid, MessageCircle, Play, Repeat2, ArrowDown, Bot, ArrowUp, BarChart3, ExternalLink, Info, Instagram, Loader2, MoreHorizontal, CloudOff, RotateCw, Sparkles, Split, Star, Tag, AtSign, Tags, TrendingUp, Users } from 'lucide-react';
 import { FilterBar, PostCategory } from './FilterBar';
 import type { DateRange } from './DateRangePicker';
 import { EChart } from '../charts/EChart';
 import { AgentChat } from '../agent/AgentChat';
 import { ThreadsMonitor } from './ThreadsMonitor';
+import { StatCard } from '../StatCard';
 import { donutOption, hBarOption, lineOption, theme, vBarOption } from '../charts/options';
 import { buildDashboard, DashboardContext, SOURCES, useDash, useIgData, type DataSource } from '@/lib/igData';
 type Metric = 'posts' | 'likes' | 'er';
@@ -123,7 +124,7 @@ const brandPerformanceColumns: {
   key: 'contentType',
   label: 'Content Type'
 }];
-const colors = ['#f97316', '#fb923c', '#f97316', '#fb923c', '#f97316', '#fb923c', '#f97316', '#fb923c'];
+const colors = ['#ff743d', '#ff9466', '#ff743d', '#ff9466', '#ff743d', '#ff9466', '#ff743d', '#ff9466'];
 const brandMatch = (text: string, brands: string[]) => brands.some(b => text.toLowerCase().includes(b.toLowerCase().split(' (')[0].split(' x ')[0]));
 const fmt = (value: number) => value.toLocaleString('en-US');
 const erClass = (value: number) => value > 0.5 ? 'er-pill er-high' : value >= 0.2 ? 'er-pill er-mid' : 'er-pill er-low';
@@ -504,8 +505,8 @@ function BrandAnalyticsView({
           </thead>
           <tbody>
             {sortedBrandRows.map(row => <tr key={row.brandName} style={brands.length && brandMatch(row.brandName, brands) ? {
-              background: 'rgba(249,115,22,.1)',
-              boxShadow: 'inset 2px 0 0 #f97316'
+              background: 'rgba(255,116,61,.1)',
+              boxShadow: 'inset 2px 0 0 #ff743d'
             } : undefined}>
               <td><strong>{row.brandName}</strong></td>
               <td className="brand-product-cell">{row.productService}</td>
@@ -665,7 +666,14 @@ export function IGViralAnalytics() {
       <FilterBar updatedLabel={D.updatedLabel} range={range} setRange={setRange} brands={brands} setBrands={setBrands} type={filter} setType={setFilter} category={postCategory} setCategory={changeCategory} shown={shownCount} total={D.total} dateOptions={D.dateOptions} brandOptions={D.brandOptions} onReset={resetFilters} />
       {activeTab === 'overview' && brands.length > 0 && <p className="mt-4 mb-0 inline-flex items-center gap-1.5 rounded-md border border-[#27272a] bg-[#18181b] px-2.5 py-1 text-[12px] text-zinc-400"><span className="w-1.5 h-1.5 rounded-full bg-orange-500" /><span>Filtered: {brands.join(', ')}</span></p>}
       {shownCount === 0 ? <section className="flex flex-col items-center gap-3 py-24 text-center"><p className="m-0 text-[13px] text-zinc-600">No posts match the selected filters</p><button className="filter-chip" onClick={resetFilters}>Reset</button></section> : <>
-      <section className="kpi-grid">{([['Total Posts', fmt(D.kpis.posts), '', 'blue'], ['Total Likes', fmt(D.kpis.likes), '', 'orange'], ['Total Comments', fmt(D.kpis.comments), '', 'orange'], ['Total Reposts', fmt(D.kpis.reposts), '', 'orange'], ['Reel Views', fmt(D.kpis.reelViews), `${fmt(D.kpis.reels)} reels`, 'blue'], ['Avg ER by followers', `${D.kpis.avgER}%`, `median ${D.kpis.medianER}%`, 'orange']] as const).map(([label, value, trend, tone]) => <article className={`kpi-card ${tone}`} key={label}><div className="kpi-label"><p>{label}</p><Info size={12} className="info-icon" /></div><strong>{value}</strong>{trend ? <span className="trend-chip">{trend}</span> : null}</article>)}</section>
+      <section className="kpi-grid">
+        <StatCard icon={<LayoutGrid />} label="Total Posts" value={fmt(D.kpis.posts)} tint="brand" />
+        <StatCard icon={<Heart />} label="Total Likes" value={fmt(D.kpis.likes)} />
+        <StatCard icon={<MessageCircle />} label="Total Comments" value={fmt(D.kpis.comments)} />
+        <StatCard icon={<Repeat2 />} label="Total Reposts" value={fmt(D.kpis.reposts)} />
+        <StatCard icon={<Play />} label="Reel Views" value={fmt(D.kpis.reelViews)} sub={`${fmt(D.kpis.reels)} reels`} tint="info" />
+        <StatCard icon={<Activity />} label="Avg ER by followers" value={`${D.kpis.avgER}%`} sub={`median ${D.kpis.medianER}%`} hint="Average engagement rate: (likes + comments) ÷ followers" />
+      </section>
       {activeTab === 'brand' ? <BrandAnalyticsView brands={brands} /> : activeTab === 'sponsored' ? <SponsoredView brands={brands} /> : <section>
       <section className="charts-grid">
         <section className="panel content-performance"><div className="chart-head"><SectionHeading eyebrow="Format mix" title="Content Type Performance" /><div className="toggle-group"><Toggle value="posts" active={contentMetric} onClick={setContentMetric} /><Toggle value="likes" active={contentMetric} onClick={setContentMetric} /><Toggle value="er" active={contentMetric} onClick={setContentMetric} /></div></div><MiniBars data={D.contentData} metric={contentMetric} onHover={() => undefined} /><div className="legend-note"><span className="legend-dot purple" />Reel <span className="legend-dot cyan" />Carousel <span className="legend-dot indigo" />Single Image</div></section>

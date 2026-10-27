@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { ECharts } from 'echarts/core';
-import { BadgeCheck, ExternalLink, Info, Search, X } from 'lucide-react';
+import { BadgeCheck, ExternalLink, Frown, Gauge, Info, MessageSquare, Search, Smile, X } from 'lucide-react';
+import { StatCard } from '@/components/StatCard';
 import { EChart } from '@/components/charts/EChart';
 import { DateRangePicker, type DateRange } from './DateRangePicker';
 import { type Account, type Row, type Topic, SENT, compact, engagement, fmt, fmtTime, polarity, polarityLabel, scoreColor, signed, terms, wibDay, type Polarity } from './threadsShared';
@@ -77,7 +78,7 @@ function Delta({ now, prev, unit = '%', invert = false, pp = false }: { now: num
   if (prev == null) return null;
   const d = pp ? now - prev : prev ? ((now - prev) / prev) * 100 : 0;
   const good = invert ? d < 0 : d > 0;
-  return <span className={`kpi-delta ${d === 0 ? '' : good ? 'up' : 'down'}`}>{signed(d, pp ? 0 : 1)}{pp ? 'pp' : unit}</span>;
+  return <span className={`delta-chip ${d === 0 ? '' : good ? 'up' : 'down'}`}>{signed(d, pp ? 0 : 1)}{pp ? 'pp' : unit}</span>;
 }
 
 // =====================================================================
@@ -159,10 +160,10 @@ export function SentimentView({ scope, accounts }: { scope: Scope; accounts: Map
   const avg = m.scored ? m.sum / m.scored : 0;
   return <div className="an-stack">
     <section className="kpi-grid threads-kpis">
-      <article className="kpi-card blue"><div className="kpi-label"><p>Total mentions</p></div><strong>{fmt(rows.length)}</strong><p className="kpi-sub">{prev ? <>Prev {fmt(prev.length)} <Delta now={rows.length} prev={prev.length} /></> : 'Posts & replies in scope'}</p></article>
-      <article className="kpi-card pos"><div className="kpi-label"><p>Positive sentiment</p></div><strong>{posPct.toFixed(0)}%</strong><p className="kpi-sub">{pPos != null ? <>Prev {pPos.toFixed(0)}% <Delta now={posPct} prev={pPos} pp /></> : `${fmt(m.pos)} posts`}</p></article>
-      <article className="kpi-card neg"><div className="kpi-label"><p>Negative sentiment</p></div><strong>{negPct.toFixed(0)}%</strong><p className="kpi-sub">{pNeg != null ? <>Prev {pNeg.toFixed(0)}% <Delta now={negPct} prev={pNeg} pp invert /></> : `${fmt(m.neg)} posts`}</p></article>
-      <article className="kpi-card orange"><div className="kpi-label"><p>Net sentiment score</p></div><strong>{signed(net)}</strong><p className="kpi-sub">{pPos != null && pNeg != null ? <>Prev {signed(Math.round(pPos - pNeg))} <Delta now={net} prev={Math.round(pPos - pNeg)} pp /></> : 'Positive % − negative %'}</p></article>
+      <StatCard icon={<MessageSquare />} label="Total mentions" value={fmt(rows.length)} delta={prev ? <Delta now={rows.length} prev={prev.length} /> : null} sub={prev ? `Prev ${fmt(prev.length)}` : 'Posts & replies in scope'} />
+      <StatCard icon={<Smile />} label="Positive sentiment" value={`${posPct.toFixed(0)}%`} tint="success" delta={pPos != null ? <Delta now={posPct} prev={pPos} pp /> : null} sub={pPos != null ? `Prev ${pPos.toFixed(0)}%` : `${fmt(m.pos)} posts`} />
+      <StatCard icon={<Frown />} label="Negative sentiment" value={`${negPct.toFixed(0)}%`} tint="destructive" delta={pNeg != null ? <Delta now={negPct} prev={pNeg} pp invert /> : null} sub={pNeg != null ? `Prev ${pNeg.toFixed(0)}%` : `${fmt(m.neg)} posts`} />
+      <StatCard icon={<Gauge />} label="Net sentiment score" value={signed(net)} tint={net > 0 ? 'success' : net < 0 ? 'destructive' : 'none'} delta={pPos != null && pNeg != null ? <Delta now={net} prev={Math.round(pPos - pNeg)} pp /> : null} sub={pPos != null && pNeg != null ? `Prev ${signed(Math.round(pPos - pNeg))}` : 'Positive % − negative %'} hint="Positive % minus negative %" />
     </section>
 
     <div className="an-grid an-grid-3">
@@ -223,7 +224,7 @@ export function SentimentView({ scope, accounts }: { scope: Scope; accounts: Map
 // =====================================================================
 type GNode = { id: string; posts: number; inW: number; outW: number; deg: number; w: number; sum: number; scored: number; cluster: number };
 type GEdge = { s: string; t: string; n: number; sum: number; scored: number };
-const PALETTE = ['#f97316', '#3b82f6', '#22c55e', '#e11d48', '#a855f7', '#eab308', '#14b8a6', '#ec4899', '#84cc16', '#06b6d4'];
+const PALETTE = ['#ff743d', '#2395ff', '#ffbe41', '#00c37f', '#b96ce3', '#00e6ef', '#fd6a94', '#f22e95', '#50dee8', '#e9cf00'];
 
 function buildGraph(rows: Row[]) {
   const byId = new Map(rows.map(r => [r.post_id, r]));
