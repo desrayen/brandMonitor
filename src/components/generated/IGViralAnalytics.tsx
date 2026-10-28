@@ -654,8 +654,8 @@ export function IGViralAnalytics() {
           const Icon = item.icon;
           return <button key={item.label} data-label={item.label} aria-label={item.label} className={!threadsMode && activeTab === item.tab && item.primary ? 'rail-btn active' : 'rail-btn'} onClick={() => { setMode('ig'); setActiveTab(item.tab); }}><Icon size={18} /></button>;
         })}
+        <button key="manage" data-label="Manage accounts" aria-label="Manage accounts" className={mode === 'manage' ? 'rail-btn active' : 'rail-btn'} onClick={() => setMode('manage')}><UserCog size={18} /></button>
       </nav>
-      <button data-label="Manage accounts" aria-label="Manage accounts" className={mode === 'manage' ? 'rail-btn active' : 'rail-btn'} onClick={() => setMode('manage')}><UserCog size={18} /></button>
       <button className="rail-avatar" title={`Switch to ${source === 'hm' ? SOURCES.kol.label : SOURCES.hm.label}`} onClick={() => switchSource(source === 'hm' ? 'kol' : 'hm')}>{SOURCES[source].short}</button>
     </aside>
     <div className="dashboard-container">
