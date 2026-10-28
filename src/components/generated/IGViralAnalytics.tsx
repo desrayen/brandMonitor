@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Activity, Heart, LayoutGrid, MessageCircle, Play, Repeat2, ArrowDown, Bot, ArrowUp, BarChart3, ExternalLink, Info, Instagram, Loader2, MoreHorizontal, CloudOff, RotateCw, Search, Sparkles, Split, Star, Tag, AtSign, Tags, TrendingUp, Users } from 'lucide-react';
+import { Activity, Heart, LayoutGrid, MessageCircle, Play, Repeat2, ArrowDown, Bot, ArrowUp, BarChart3, ExternalLink, Info, Instagram, Loader2, MoreHorizontal, CloudOff, RotateCw, Search, Sparkles, Split, UserCog, Star, Tag, AtSign, Tags, TrendingUp, Users } from 'lucide-react';
 import { FilterBar, PostCategory } from './FilterBar';
 import type { DateRange } from './DateRangePicker';
 import { EChart } from '../charts/EChart';
 import { AgentChat } from '../agent/AgentChat';
 import { ThreadsMonitor } from './ThreadsMonitor';
 import { SearchConsole } from './SearchConsole';
+import { AccountManager } from './AccountManager';
 import { StatCard } from '../StatCard';
 import { donutOption, hBarOption, lineOption, theme, vBarOption } from '../charts/options';
 import { buildDashboard, DashboardContext, SOURCES, useDash, useIgData, type DataSource } from '@/lib/igData';
@@ -606,7 +607,7 @@ export function IGViralAnalytics() {
   const [brands, setBrands] = useState<string[]>([]);
   const [postCategory, setPostCategory] = useState<PostCategory>('All');
   const [source, setSource] = useState<DataSource>('hm');
-  const [mode, setMode] = useState<'ig' | 'threads' | 'gsc'>('ig');
+  const [mode, setMode] = useState<'ig' | 'threads' | 'gsc' | 'manage'>('ig');
   const threadsMode = mode !== 'ig'; // any non-Instagram view (Threads / Search Console)
   const { data, error, reload } = useIgData(source);
   const D = useMemo(() => data ? buildDashboard(data, { range, brands, type: filter, category: postCategory }) : null, [data, range, brands, filter, postCategory]);
@@ -654,11 +655,12 @@ export function IGViralAnalytics() {
           return <button key={item.label} data-label={item.label} aria-label={item.label} className={!threadsMode && activeTab === item.tab && item.primary ? 'rail-btn active' : 'rail-btn'} onClick={() => { setMode('ig'); setActiveTab(item.tab); }}><Icon size={18} /></button>;
         })}
       </nav>
+      <button data-label="Manage accounts" aria-label="Manage accounts" className={mode === 'manage' ? 'rail-btn active' : 'rail-btn'} onClick={() => setMode('manage')}><UserCog size={18} /></button>
       <button className="rail-avatar" title={`Switch to ${source === 'hm' ? SOURCES.kol.label : SOURCES.hm.label}`} onClick={() => switchSource(source === 'hm' ? 'kol' : 'hm')}>{SOURCES[source].short}</button>
     </aside>
     <div className="dashboard-container">
       <header className="top-header">
-        <p className="crumbs"><span>Analytics</span><span>›</span><span>{mode === 'threads' ? 'Threads Monitor' : mode === 'gsc' ? 'Search Console' : SOURCES[source].label}</span>{!threadsMode && <><span>›</span><strong>{tabs.find(t => t.key === activeTab)?.label}</strong></>}</p>
+        <p className="crumbs"><span>Analytics</span><span>›</span><span>{mode === 'threads' ? 'Threads Monitor' : mode === 'gsc' ? 'Search Console' : mode === 'manage' ? 'Manage Accounts' : SOURCES[source].label}</span>{!threadsMode && <><span>›</span><strong>{tabs.find(t => t.key === activeTab)?.label}</strong></>}</p>
         <nav className="tab-nav source-nav" aria-label="Dataset">{(Object.keys(SOURCES) as DataSource[]).map(key => <button key={key} className={!threadsMode && source === key ? 'tab-pill active' : 'tab-pill'} onClick={() => switchSource(key)}>{key === 'kol' ? <Star size={14} /> : <Users size={14} />}<span>{SOURCES[key].label}</span></button>)}<button className={mode === 'threads' ? 'tab-pill active' : 'tab-pill'} onClick={() => setMode('threads')}><AtSign size={14} /><span>Threads</span></button><button className={mode === 'gsc' ? 'tab-pill active' : 'tab-pill'} onClick={() => setMode('gsc')}><Search size={14} /><span>Search Console</span></button></nav>
         {!threadsMode && <nav className="tab-nav" aria-label="Analytics sections">{tabs.filter(tab => source === 'hm' || tab.key !== 'agent').map(tab => {
             const Icon = tab.icon;
@@ -666,7 +668,7 @@ export function IGViralAnalytics() {
           })}</nav>}
         {!threadsMode && <span className="theme-badge">{D ? `${D.rangeLabel} · ${fmt(D.total)} posts` : <span className="skeleton skeleton-badge" aria-hidden="true" />}</span>}
       </header>
-      {mode === 'gsc' ? <SearchConsole /> : threadsMode ? <ThreadsMonitor /> : activeTab === 'agent' ? <AgentChat /> : error ? <section className="state-panel" role="alert"><span className="state-icon"><CloudOff size={20} /></span><h3>We couldn't load the dashboard</h3><p>Something went wrong while getting the latest posts. Check your connection and try again.</p><button className="state-btn" onClick={reload} title={error}><RotateCw size={14} />Try again</button></section> : !D ? <DashboardSkeleton label={`Getting the latest ${SOURCES[source].label} insights…`} /> : <DashboardContext.Provider value={D}>
+      {mode === 'manage' ? <AccountManager /> : mode === 'gsc' ? <SearchConsole /> : threadsMode ? <ThreadsMonitor /> : activeTab === 'agent' ? <AgentChat /> : error ? <section className="state-panel" role="alert"><span className="state-icon"><CloudOff size={20} /></span><h3>We couldn't load the dashboard</h3><p>Something went wrong while getting the latest posts. Check your connection and try again.</p><button className="state-btn" onClick={reload} title={error}><RotateCw size={14} />Try again</button></section> : !D ? <DashboardSkeleton label={`Getting the latest ${SOURCES[source].label} insights…`} /> : <DashboardContext.Provider value={D}>
       <FilterBar updatedLabel={D.updatedLabel} range={range} setRange={setRange} brands={brands} setBrands={setBrands} type={filter} setType={setFilter} category={postCategory} setCategory={changeCategory} shown={shownCount} total={D.total} dateOptions={D.dateOptions} brandOptions={D.brandOptions} onReset={resetFilters} />
       {activeTab === 'overview' && brands.length > 0 && <p className="mt-4 mb-0 inline-flex items-center gap-1.5 rounded-md border border-[#27272a] bg-[#18181b] px-2.5 py-1 text-[12px] text-zinc-400"><span className="w-1.5 h-1.5 rounded-full bg-orange-500" /><span>Filtered: {brands.join(', ')}</span></p>}
       {shownCount === 0 ? <section className="flex flex-col items-center gap-3 py-24 text-center"><p className="m-0 text-[13px] text-zinc-600">No posts match the selected filters</p><button className="filter-chip" onClick={resetFilters}>Reset</button></section> : <>
@@ -693,7 +695,7 @@ export function IGViralAnalytics() {
       </section>}
       </>}
       </DashboardContext.Provider>}
-      {(threadsMode || activeTab !== 'agent') && <footer className="footer-note"><span><Sparkles size={14} />Built for signal, not noise.</span><span>{mode === 'gsc' ? 'Data Google Search Console · Live data' : threadsMode ? 'Data Threads · Live data' : `${SOURCES[source].footer} · Live data${D?.updatedLabel ? ` · Updated ${D.updatedLabel}` : ''}`}</span></footer>}
+      {(threadsMode || activeTab !== 'agent') && <footer className="footer-note"><span><Sparkles size={14} />Built for signal, not noise.</span><span>{mode === 'manage' ? 'Monitored accounts · Live data' : mode === 'gsc' ? 'Data Google Search Console · Live data' : threadsMode ? 'Data Threads · Live data' : `${SOURCES[source].footer} · Live data${D?.updatedLabel ? ` · Updated ${D.updatedLabel}` : ''}`}</span></footer>}
     </div>
   </main>;
 }
