@@ -15,8 +15,8 @@ import postgres from 'npm:postgres@3.4.5';
 const sql = postgres(Deno.env.get('SUPABASE_DB_URL')!, { max: 1, prepare: false });
 
 const TIME_BUDGET_MS = 110_000; // stay under the edge function wall clock limit
-const RECENT_DAYS = [2, 3, 4, 5]; // GSC data settles ~2-3 days after the date
-const RECENT_EVERY_MS = 20 * 3600_000;
+const RECENT_DAYS = [1, 2, 3, 4, 5, 6]; // fresh data appears ~1 day after; numbers settle within a few days, so keep re-syncing
+const RECENT_EVERY_MS = 6 * 3600_000;
 const HISTORY_DAYS = 486; // ~16 months, GSC retention
 const PAGE_SIZE = 25_000; // API max rows per request
 const API = 'https://searchconsole.googleapis.com/webmasters/v3';
@@ -93,7 +93,7 @@ async function query(site: string, date: string, dimensions: string[], maxRows: 
     const body = await gsc(`/sites/${encodeURIComponent(site)}/searchAnalytics/query`, {
       method: 'POST',
       body: JSON.stringify({
-        startDate: date, endDate: date, dimensions, type: 'web', dataState: 'final',
+        startDate: date, endDate: date, dimensions, type: 'web', dataState: 'all', // include fresh (not yet final) data, like the GSC UI
         rowLimit: Math.min(PAGE_SIZE, maxRows - startRow), startRow,
       }),
     });
