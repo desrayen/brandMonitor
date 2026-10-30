@@ -409,6 +409,7 @@ td:first-child { color: #fafafa; font-family: Inter, sans-serif; font-size: 13px
 .status-pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-family: Inter, sans-serif; }
 .status-pill.on { background: rgba(75,222,129,.12); color: #8eeab0; } .status-pill.off { background: #27272a; color: #a1a1aa; }
 .status-pill.run { background: rgba(35,149,255,.12); color: #8ec8ff; } .status-pill.bad { background: rgba(246,44,30,.12); color: #ff8f86; }
+.status-pill.warn { background: rgba(255,148,102,.12); color: #ff9466; }
 .icon-btn { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 7px; border: 1px solid #27272a; background: #18181b; color: #a1a1aa; cursor: pointer; }
 .icon-btn:hover { color: #fafafa; border-color: #3f3f46; } .icon-btn.danger:hover { color: #f8564b; border-color: rgba(246,44,30,.4); }
 .topic-form { display: grid; gap: 12px; margin-bottom: 16px; padding: 16px; border-radius: 10px; border: 1px solid #3f3f46; background: #09090b; }
