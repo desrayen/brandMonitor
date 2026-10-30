@@ -3,7 +3,7 @@
 // gsc_daily (full totals by device x country) and gsc_query_page (query x page).
 //
 // Triggered by pg_cron every 10 minutes with the x-internal-secret header.
-//   ?op=sync  (default) refresh recent days once per ~20h, then backfill older days
+//   ?op=sync  (default) refresh the last 6 days every ~6h, then backfill older days (a few dates per run)
 //   ?op=sites refresh the list of Search Console properties only
 //
 // Secrets (Supabase > Edge Functions > Secrets):
@@ -15,6 +15,7 @@ import postgres from 'npm:postgres@3.4.5';
 const sql = postgres(Deno.env.get('SUPABASE_DB_URL')!, { max: 1, prepare: false });
 
 const TIME_BUDGET_MS = 110_000; // stay under the edge function wall clock limit
+const DATES_PER_RUN = 2; // dates synced per invocation (CPU limit); cron runs every 10 min
 const RECENT_DAYS = [1, 2, 3, 4, 5, 6]; // fresh data appears ~1 day after; numbers settle within a few days, so keep re-syncing
 const RECENT_EVERY_MS = 6 * 3600_000;
 const HISTORY_DAYS = 486; // ~16 months, GSC retention
@@ -143,32 +144,41 @@ async function syncDate(site: string, date: string, maxRows: number) {
 
 async function sync(started: number) {
   const log: Record<string, unknown>[] = [];
-  const timeLeft = () => Date.now() - started < TIME_BUDGET_MS;
+  // Edge functions have tight CPU limits: do a few dates per run and keep progress in the DB.
+  let budget = DATES_PER_RUN;
+  const canWork = () => budget > 0 && Date.now() - started < TIME_BUDGET_MS;
 
   // Pick up newly added Search Console properties (cheap: one API call)
   await refreshSites();
 
-  const sites = await sql`select * from public.gsc_sites where enabled order by site_url`;
+  // Most out-of-date site first, so one big site can't starve the others
+  const sites = await sql`select * from public.gsc_sites where enabled order by recent_synced_at asc nulls first, site_url`;
   for (const s of sites) {
     const site = s.site_url as string;
     try {
-      // 1) Recent days (re-synced because GSC numbers settle after a few days)
-      const recentDue = !s.recent_synced_at || Date.now() - new Date(s.recent_synced_at).getTime() > RECENT_EVERY_MS;
-      if (recentDue && timeLeft()) {
-        for (const n of RECENT_DAYS) {
-          const date = isoDaysAgo(n);
-          log.push({ site, date, kind: 'recent', ...(await syncDate(site, date, s.max_rows_per_day)) });
+      // 1) Recent days (re-synced because GSC numbers settle after a few days), one date per step
+      let due = !s.recent_synced_at || Date.now() - new Date(s.recent_synced_at).getTime() > RECENT_EVERY_MS;
+      let idx = Math.min(s.recent_idx ?? 0, RECENT_DAYS.length - 1);
+      while (due && canWork()) {
+        const date = isoDaysAgo(RECENT_DAYS[idx]);
+        log.push({ site, date, kind: 'recent', ...(await syncDate(site, date, s.max_rows_per_day)) });
+        budget--;
+        idx++;
+        if (idx >= RECENT_DAYS.length) {
+          await sql`
+            update public.gsc_sites set recent_synced_at = now(), recent_idx = 0, last_error = null, updated_at = now(),
+              backfill_cursor = coalesce(backfill_cursor, ${isoDaysAgo(RECENT_DAYS[RECENT_DAYS.length - 1])}::date)
+            where site_url = ${site}`;
+          due = false;
+        } else {
+          await sql`update public.gsc_sites set recent_idx = ${idx}, last_error = null, updated_at = now() where site_url = ${site}`;
         }
-        await sql`
-          update public.gsc_sites set recent_synced_at = now(), last_error = null, updated_at = now(),
-            backfill_cursor = coalesce(backfill_cursor, ${isoDaysAgo(RECENT_DAYS[RECENT_DAYS.length - 1])}::date)
-          where site_url = ${site}`;
       }
-      // 2) Backfill older days, walking backwards ~16 months
+      // 2) Backfill older days, walking backwards ~16 months (only when enabled for the site)
       let [{ backfill_cursor: cursor, backfill_done: done }] =
         await sql`select backfill_cursor, backfill_done from public.gsc_sites where site_url = ${site}`;
       const oldest = isoDaysAgo(HISTORY_DAYS);
-      while (cursor && !done && timeLeft()) {
+      while (!due && cursor && !done && canWork()) {
         const date = addDays(new Date(cursor).toISOString().slice(0, 10), -1);
         if (date < oldest) {
           done = true;
@@ -176,6 +186,7 @@ async function sync(started: number) {
           break;
         }
         log.push({ site, date, kind: 'backfill', ...(await syncDate(site, date, s.max_rows_per_day)) });
+        budget--;
         await sql`update public.gsc_sites set backfill_cursor = ${date}::date, last_error = null, updated_at = now() where site_url = ${site}`;
         cursor = date;
       }
