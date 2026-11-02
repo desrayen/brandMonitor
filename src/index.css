@@ -547,3 +547,30 @@ td:first-child { color: #fafafa; font-family: Inter, sans-serif; font-size: 13px
   .kpi-delta { padding: 0 4px; font-size: 11px; }
 }
 @media (max-width: 720px) { .rail-btn.active { box-shadow: inset 0 -2px 0 var(--site-primary); } }
+
+/* ---------- The FYP Leak ---------- */
+.fyp-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 16px 0; }
+.fyp-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.fyp-item { padding: 14px 0; border-top: 1px solid #27272a; } .fyp-item:first-child { border-top: 0; padding-top: 0; }
+.fyp-item.promo { opacity: .55; }
+.fyp-item-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13.5px; color: #fafafa; }
+.fyp-item-head strong { font-weight: 600; margin-right: 4px; }
+.fyp-rank { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 6px; background: #27272a; color: #a1a1aa; font-size: 11px; font-variant-numeric: tabular-nums; }
+.fyp-score { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 999px; font-size: 12px; font-weight: 700; background: #27272a; color: #e4e4e7; }
+.fyp-score.s3 { background: rgba(255,148,102,.18); color: #ff9466; } .fyp-score.s4 { background: #ff743d; color: #09090b; }
+.kw-tag.hm { background: rgba(255,116,61,.12); color: #ff9466; }
+.fyp-context { margin: 6px 0 0; font-size: 12.5px; line-height: 1.55; color: #a1a1aa; white-space: normal; }
+.fyp-note { margin: 0 0 10px; font-size: 11.5px; color: #71717a; }
+.fyp-empty { margin: 0; padding: 32px 0; text-align: center; font-size: 13px; color: #71717a; }
+.fyp-cap { max-width: 360px; overflow: hidden; text-overflow: ellipsis; }
+.fyp-cap a, .fyp-samples a { color: #e4e4e7; text-decoration: none; } .fyp-cap a:hover, .fyp-samples a:hover { color: #ff9466; }
+.fyp-detail { white-space: normal; background: #141416; padding: 12px 16px !important; }
+.fyp-samples { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; font-size: 12.5px; }
+.fyp-samples li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; } .fyp-samples a { display: inline-flex; align-items: center; gap: 4px; } .fyp-samples span { color: #71717a; font-size: 11.5px; }
+.fyp-videos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.fyp-video { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid #27272a; border-radius: 12px; background: #141416; font-size: 12px; min-width: 0; }
+.fyp-video header { display: flex; justify-content: space-between; gap: 6px; color: #71717a; } .fyp-video header a { color: #fafafa; text-decoration: none; font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+.fyp-video p { margin: 0; color: #a1a1aa; line-height: 1.45; white-space: normal; overflow-wrap: anywhere; }
+.fyp-video footer { display: flex; flex-wrap: wrap; gap: 8px; color: #d4d4d8; font-variant-numeric: tabular-nums; }
+.fyp-video small { color: #71717a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 760px) { .fyp-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .fyp-videos { grid-template-columns: 1fr; } }
