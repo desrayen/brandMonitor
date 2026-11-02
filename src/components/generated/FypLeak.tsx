@@ -1,0 +1,281 @@
+import { useEffect, useMemo, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Flame, Search, Music2, AtSign, Users, Star, ExternalLink, Loader2, Radar, ChevronDown, ChevronRight, Zap, Clock } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { StatCard } from '../StatCard';
+
+// ---------- types ----------
+type Run = { id: string; started_at: string; finished_at: string | null; sources: string[]; status: string; summary: string | null; notes: string | null };
+type Sample = { url?: string; title?: string; meta?: string; author?: string; ago?: string; views?: string; likes?: string; comments?: string; saves?: string; caption?: string; sound?: string; hashtags?: string[]; text?: string; metrics?: string; user?: string };
+type Signal = {
+  id: number; run_id: string; captured_at: string; source: 'google_trends' | 'tiktok' | 'x'; feed: '4h' | '24h' | 'trending' | 'for_you';
+  rank: number | null; title: string; volume_text: string | null; volume_num: number | null; growth_text: string | null; started_text: string | null; status_text: string | null;
+  category: string | null; is_organic: boolean | null; organic_reason: string | null; related_terms: string[]; context: string | null; samples: Sample[];
+};
+type Post = {
+  account_handle: string; post_url: string | null; content_type: string; post_category: string; caption: string | null; published_at: string; created_at: string;
+  likes: number | null; comments: number | null; views: number | null; likes_hidden: boolean | null; viral_category: string | null; primary_trigger: string | null;
+};
+type FeedPost = Post & { src: 'HM' | 'KOL'; lift: number; perHour: number; ageH: number; breakout: boolean };
+type Tab = 'radar' | 'ig' | 'gt' | 'tt' | 'x';
+
+// ---------- helpers ----------
+const fmt = (n: number | null | undefined) => n == null ? '–' : n.toLocaleString('en-US');
+const compact = (n: number) => n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : String(Math.round(n));
+const wib = (iso: string) => new Date(iso).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+const ago = (iso: string) => { const h = (Date.now() - Date.parse(iso)) / 36e5; return h < 1 ? `${Math.max(1, Math.round(h * 60))} mnt lalu` : h < 48 ? `${Math.round(h)} jam lalu` : `${Math.round(h / 24)} hari lalu`; };
+const median = (xs: number[]) => { if (!xs.length) return 0; const v = [...xs].sort((a, b) => a - b); const m = v.length >> 1; return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
+
+const STOP = new Set('yang dan di ke dari untuk dengan ini itu ada pada akan atau juga tidak bisa dalam sudah saat jadi oleh karena para lagi baru soal hari jam kata usai vs the and for with from you are this that was how what new live 2025 2026 indonesia trending'.split(' '));
+const tokens = (s: string) => new Set((s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9\s#]/g, ' ').match(/[a-z0-9#]{4,}/g) ?? []).map(t => t.replace(/^#/, '')).filter(t => !STOP.has(t)));
+const signalTokens = (s: Signal) => tokens([s.title, ...(s.related_terms ?? [])].join(' '));
+
+async function fetchAll<T>(table: string, columns: string, filter?: (q: any) => any): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += 1000) {
+    let q = supabase.from(table).select(columns);
+    if (filter) q = filter(q);
+    const { data, error } = await q.range(from, from + 999);
+    if (error) throw error;
+    out.push(...((data ?? []) as T[]));
+    if (!data || data.length < 1000) break;
+  }
+  return out;
+}
+
+const POST_COLS = 'account_handle,post_url,content_type,post_category,caption,published_at,created_at,likes,comments,views,likes_hidden,viral_category,primary_trigger';
+
+/** Latest HM + KOL posts, scored against each account's own baseline (lift) and likes/hour at capture. */
+function scorePosts(posts: Post[], src: 'HM' | 'KOL', windowH: number): { latestCapture: string | null; feed: FeedPost[] } {
+  if (!posts.length) return { latestCapture: null, feed: [] };
+  const byAcc = new Map<string, Post[]>();
+  posts.forEach(p => { if (!byAcc.has(p.account_handle)) byAcc.set(p.account_handle, []); byAcc.get(p.account_handle)!.push(p); });
+  const perHour = (p: Post) => (p.likes ?? 0) / Math.max(1, (Date.parse(p.created_at) - Date.parse(p.published_at)) / 36e5);
+  const base = new Map<string, { likes: number; ph: number }>();
+  byAcc.forEach((ps, h) => { const v = ps.filter(p => !p.likes_hidden && p.likes != null); base.set(h, { likes: median(v.map(p => p.likes!)), ph: median(v.map(perHour)) }); });
+  const latestCapture = posts.reduce((m, p) => p.created_at > m ? p.created_at : m, posts[0].created_at);
+  const cutoff = Date.parse(latestCapture) - windowH * 36e5;
+  const feed = posts.filter(p => Date.parse(p.published_at) >= cutoff && !p.likes_hidden && p.post_category !== 'Sponsored Post').map(p => {
+    const b = base.get(p.account_handle)!;
+    const lift = b.likes ? (p.likes ?? 0) / b.likes : 0;
+    const ph = perHour(p);
+    return { ...p, src, lift, perHour: ph, ageH: (Date.parse(p.created_at) - Date.parse(p.published_at)) / 36e5, breakout: lift >= 3 || (b.ph > 0 && ph >= 3 * b.ph) };
+  });
+  return { latestCapture, feed };
+}
+
+// ---------- main ----------
+export function FypLeak() {
+  const [runs, setRuns] = useState<Run[] | null>(null);
+  const [runId, setRunId] = useState('');
+  const [signals, setSignals] = useState<Signal[] | null>(null);
+  const [hm, setHm] = useState<Post[] | null>(null);
+  const [kol, setKol] = useState<Post[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>('radar');
+  const [windowH, setWindowH] = useState(24);
+
+  useEffect(() => {
+    supabase.from('fyp_runs').select('*').order('started_at', { ascending: false }).limit(30).then(({ data, error }) => {
+      if (error) { setError(error.message); return; }
+      setRuns((data ?? []) as Run[]);
+      if (data?.[0]) setRunId(data[0].id);
+    });
+    const since = new Date(Date.now() - 45 * 864e5).toISOString();
+    fetchAll<Post>('ig_posts', POST_COLS, q => q.gte('published_at', since)).then(setHm).catch(e => setError(e.message));
+    fetchAll<Post>('kol_posts', POST_COLS, q => q.gte('published_at', since)).then(setKol).catch(e => setError(e.message));
+  }, []);
+  useEffect(() => {
+    if (!runId) return;
+    setSignals(null);
+    fetchAll<Signal>('fyp_signals', '*', q => q.eq('run_id', runId).order('source').order('feed').order('rank')).then(setSignals).catch(e => setError(e.message));
+  }, [runId]);
+
+  const run = runs?.find(r => r.id === runId) ?? null;
+  const hmScore = useMemo(() => hm ? scorePosts(hm, 'HM', windowH) : null, [hm, windowH]);
+  const kolScore = useMemo(() => kol ? scorePosts(kol, 'KOL', windowH) : null, [kol, windowH]);
+  const igFeed = useMemo(() => [...(hmScore?.feed ?? []), ...(kolScore?.feed ?? [])].sort((a, b) => b.lift - a.lift), [hmScore, kolScore]);
+  const sig = signals ?? [];
+  const by = (source: Signal['source'], feed?: Signal['feed']) => sig.filter(s => s.source === source && (!feed || s.feed === feed));
+
+  // Cross-source radar: a topic gets stronger the more independent sources mention it.
+  const radar = useMemo(() => {
+    const pool = sig.filter(s => s.source !== 'x' || s.is_organic !== false);
+    const igTok = igFeed.map(p => ({ p, t: tokens(`${p.caption ?? ''}`) }));
+    const items = pool.map(s => {
+      const t = signalTokens(s);
+      const hits = new Map<string, Signal[]>();
+      pool.forEach(o => { if (o.id === s.id || o.source === s.source) return; const ot = signalTokens(o); if ([...t].some(x => ot.has(x))) { const k = o.source; hits.set(k, [...(hits.get(k) ?? []), o]); } });
+      const ig = igTok.filter(({ t: pt }) => { let n = 0; t.forEach(x => { if (pt.has(x)) n++; }); return n >= Math.min(2, t.size); }).map(x => x.p);
+      const sources = 1 + hits.size + (ig.length ? 1 : 0);
+      return { s, hits, ig, sources };
+    }).filter(x => x.sources >= 2);
+    // de-duplicate: keep the best-ranked representative per overlapping cluster
+    const seen = new Set<number>();
+    return items.sort((a, b) => b.sources - a.sources || (b.ig.length - a.ig.length) || ((a.s.rank ?? 99) - (b.s.rank ?? 99))).filter(x => {
+      if (seen.has(x.s.id)) return false;
+      seen.add(x.s.id); x.hits.forEach(list => list.forEach(o => seen.add(o.id)));
+      return true;
+    });
+  }, [sig, igFeed]);
+
+  if (error) return <section className="state-panel" role="alert"><h3>We couldn't load The FYP Leak</h3><p>{error}</p></section>;
+  if (runs === null) return <div className="state-panel"><Loader2 size={18} className="auth-spin" /><p>Getting the latest signals…</p></div>;
+
+  const tabs: [Tab, string, React.ReactNode][] = [['radar', 'Leak Radar', <Radar size={14} />], ['ig', 'Homeless & KOL', <Users size={14} />], ['gt', 'Google Trends', <Search size={14} />], ['tt', 'TikTok', <Music2 size={14} />], ['x', 'X', <AtSign size={14} />]];
+  const breakouts = igFeed.filter(p => p.breakout).length;
+  const organicX = by('x').filter(s => s.is_organic).length;
+
+  return <section className="fyp-leak">
+    <div className="threads-filters">
+      <label className="threads-select"><span>Snapshot</span>
+        <select value={runId} onChange={e => setRunId(e.target.value)}>{runs.length === 0 && <option value="">No snapshots yet</option>}{runs.map(r => <option key={r.id} value={r.id}>{wib(r.started_at)} WIB · {r.sources.join(', ')}</option>)}</select>
+      </label>
+      <label className="threads-select"><span>IG window</span>
+        <select value={windowH} onChange={e => setWindowH(+e.target.value)}>{[6, 12, 24, 48, 72].map(h => <option key={h} value={h}>Last {h} h of capture</option>)}</select>
+      </label>
+      {run && <p className="threads-meta !m-0"><span className="live-dot" />Signals collected {ago(run.started_at)} · {run.status}{run.notes ? ` · ${run.notes}` : ''}</p>}
+    </div>
+
+    <section className="kpi-grid fyp-kpis">
+      <StatCard icon={<Radar size={18} />} label="Cross-source topics" value={radar.length} tint="brand" hint="Topics found in at least two sources (Google Trends, TikTok, X, HM/KOL captions)" />
+      <StatCard icon={<Zap size={18} />} label="IG breakouts" value={breakouts} sub={`of ${igFeed.length} recent HM/KOL posts`} tint="warning" hint="Likes ≥ 3× the account median, or likes per hour ≥ 3× the account's usual pace" />
+      <StatCard icon={<Search size={18} />} label="Google Trends" value={by('google_trends').length} sub={`${by('google_trends', '4h').length} in 4 h · ${by('google_trends', '24h').length} in 24 h`} />
+      <StatCard icon={<Music2 size={18} />} label="TikTok topics" value={by('tiktok').length} sub="Indonesia · Creative inspiration" />
+      <StatCard icon={<AtSign size={18} />} label="X organic trends" value={organicX} sub={`${by('x').length - organicX} promo/brand removed`} />
+      <StatCard icon={<Clock size={18} />} label="Latest IG capture" value={hmScore?.latestCapture ? ago(hmScore.latestCapture) : '–'} sub={hmScore?.latestCapture ? `${wib(hmScore.latestCapture)} WIB` : undefined} />
+    </section>
+
+    <nav className="threads-subnav" aria-label="FYP Leak sections">{tabs.map(([k, label, icon]) => <button key={k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>{icon}{label}</button>)}</nav>
+
+    {runs.length === 0 && tab !== 'ig' ? <section className="state-panel"><span className="state-icon"><Flame size={20} /></span><h3>No snapshots yet</h3><p>Run the “Metric Update The FYP Leak” skill to collect Google Trends, TikTok and X signals.</p></section>
+      : signals === null && tab !== 'ig' ? <div className="state-panel"><Loader2 size={18} className="auth-spin" /><p>Loading snapshot…</p></div>
+      : tab === 'radar' ? <RadarView run={run} radar={radar} />
+      : tab === 'ig' ? <IgView feed={igFeed} hm={hmScore?.latestCapture ?? null} kol={kolScore?.latestCapture ?? null} />
+      : tab === 'gt' ? <GoogleView items={by('google_trends')} />
+      : tab === 'tt' ? <TikTokView items={by('tiktok')} />
+      : <XView items={by('x')} />}
+  </section>;
+}
+
+function Heading({ title, action }: { title: React.ReactNode; action?: React.ReactNode }) {
+  return <header className="section-heading"><h2>{title}</h2>{action}</header>;
+}
+const SRC_LABEL: Record<string, string> = { google_trends: 'Google', tiktok: 'TikTok', x: 'X', ig: 'HM/KOL' };
+
+// ---------- Radar ----------
+function RadarView({ run, radar }: { run: Run | null; radar: { s: Signal; hits: Map<string, Signal[]>; ig: FeedPost[]; sources: number }[] }) {
+  return <div className="an-stack">
+    {run?.summary && <section className="panel"><Heading title={<><Flame size={15} className="text-[#ff743d]" />Leak brief</>} action={<span className="muted-action">Written when the snapshot was collected</span>} />
+      <div className="agent-md"><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: props => <a {...props} target="_blank" rel="noreferrer" /> }}>{run.summary}</ReactMarkdown></div></section>}
+    <section className="panel">
+      <Heading title="Topics showing up in more than one place" action={<span className="muted-action">More sources = stronger FYP signal</span>} />
+      {radar.length === 0 ? <p className="fyp-empty">No overlap between sources in this snapshot yet.</p> : <ul className="fyp-list">
+        {radar.map(({ s, hits, ig, sources }) => <li key={s.id} className="fyp-item">
+          <div className="fyp-item-head">
+            <span className={`fyp-score s${Math.min(sources, 4)}`}>{sources}</span>
+            <strong>{s.title}</strong>
+            <span className="kw-tag">{SRC_LABEL[s.source]} #{s.rank}</span>
+            {[...hits.entries()].map(([src, list]) => <span key={src} className="kw-tag" title={list.map(o => o.title).join(' · ')}>{SRC_LABEL[src]}: {list[0].title}{list.length > 1 ? ` +${list.length - 1}` : ''}</span>)}
+            {ig.length > 0 && <span className="kw-tag hm" title={ig.map(p => `@${p.account_handle}`).join(', ')}>HM/KOL: {ig.length} post{ig.length > 1 ? 's' : ''}{ig.some(p => p.breakout) ? ' · breakout' : ''}</span>}
+          </div>
+          {s.context && <p className="fyp-context">{s.context}</p>}
+        </li>)}
+      </ul>}
+    </section>
+  </div>;
+}
+
+// ---------- Homeless & KOL ----------
+function IgView({ feed, hm, kol }: { feed: FeedPost[]; hm: string | null; kol: string | null }) {
+  const [src, setSrc] = useState<'all' | 'HM' | 'KOL'>('all');
+  const [only, setOnly] = useState(false);
+  const rows = feed.filter(p => (src === 'all' || p.src === src) && (!only || p.breakout)).slice(0, 60);
+  return <section className="panel">
+    <Heading title={`${rows.length} recent posts, ranked by lift`} action={<span className="muted-action">HM captured {hm ? ago(hm) : '–'} · KOL captured {kol ? ago(kol) : '–'}</span>} />
+    <div className="flex flex-wrap gap-1.5 pb-3">
+      {(['all', 'HM', 'KOL'] as const).map(k => <button key={k} className={`filter-chip ${src === k ? 'active' : ''}`} onClick={() => setSrc(k)}>{k === 'all' ? 'All' : k === 'HM' ? 'Homeless media' : 'KOL'}</button>)}
+      <button className={`filter-chip ${only ? 'active' : ''}`} onClick={() => setOnly(!only)}>Breakouts only</button>
+    </div>
+    <p className="fyp-note">Lift = likes ÷ the account's median likes. Likes/h = likes ÷ post age when it was captured (one snapshot per post, so young posts are under-counted).</p>
+    <div className="table-scroll"><table>
+      <thead><tr><th>Account</th><th>Post</th><th>Topic</th><th>Age at capture</th><th>Likes</th><th>Likes/h</th><th>Lift</th></tr></thead>
+      <tbody>{rows.map(p => <tr key={`${p.src}${p.post_url}`}>
+        <td><span className="inline-flex items-center gap-1.5">{p.src === 'KOL' ? <Star size={12} /> : <Users size={12} />}@{p.account_handle}</span></td>
+        <td className="fyp-cap" title={p.caption ?? ''}>{p.post_url ? <a href={p.post_url} target="_blank" rel="noreferrer">{(p.caption ?? '(no caption)').slice(0, 80)}</a> : (p.caption ?? '').slice(0, 80)}<span className="kw-tag ml-1.5">{p.content_type}</span></td>
+        <td>{p.viral_category ?? '–'}{p.primary_trigger ? <span className="text-zinc-500"> · {p.primary_trigger}</span> : null}</td>
+        <td>{p.ageH < 1 ? `${Math.round(p.ageH * 60)} mnt` : `${p.ageH.toFixed(1)} h`}</td>
+        <td>{fmt(p.likes)}</td><td>{compact(p.perHour)}</td>
+        <td><span className={`status-pill ${p.breakout ? 'warn' : p.lift >= 1 ? 'on' : 'off'}`}>{p.lift.toFixed(1)}×</span></td>
+      </tr>)}</tbody>
+    </table></div>
+  </section>;
+}
+
+// ---------- Google Trends ----------
+function GoogleView({ items }: { items: Signal[] }) {
+  const [feed, setFeed] = useState<'4h' | '24h'>('4h');
+  const [open, setOpen] = useState<number | null>(null);
+  const rows = items.filter(s => s.feed === feed);
+  return <section className="panel">
+    <Heading title={`Google Trends Indonesia · past ${feed === '4h' ? '4 hours' : '24 hours'}`} action={<div className="flex gap-1.5">{(['4h', '24h'] as const).map(f => <button key={f} className={`filter-chip ${feed === f ? 'active' : ''}`} onClick={() => setFeed(f)}>{f}</button>)}</div>} />
+    <div className="table-scroll"><table>
+      <thead><tr><th>#</th><th>Trend</th><th>Searches</th><th>Growth</th><th>Started</th><th>Status</th><th>Related searches</th></tr></thead>
+      <tbody>{rows.flatMap(s => {
+        const isOpen = open === s.id;
+        return [<tr key={s.id} className="cursor-pointer" onClick={() => setOpen(isOpen ? null : s.id)}>
+          <td>{s.rank}</td>
+          <td><span className="inline-flex items-center gap-1">{isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}<strong className="font-medium">{s.title}</strong></span></td>
+          <td>{s.volume_text}</td><td>{s.growth_text}</td><td>{s.started_text}</td>
+          <td><span className={`status-pill ${/active/i.test(s.status_text ?? '') ? 'on' : 'off'}`}>{s.status_text}</span></td>
+          <td className="fyp-cap">{s.related_terms.slice(0, 4).join(', ')}{s.related_terms.length > 4 ? ` +${s.related_terms.length - 4}` : ''}</td>
+        </tr>, isOpen && <tr key={`${s.id}-d`}><td colSpan={7} className="fyp-detail">
+          {s.context && <p className="fyp-context">{s.context}</p>}
+          <div className="flex flex-wrap gap-1 mb-2">{s.related_terms.map(t => <span key={t} className="kw-tag">{t}</span>)}</div>
+          <ul className="fyp-samples">{s.samples.map((n, i) => <li key={i}><a href={n.url} target="_blank" rel="noreferrer">{n.title}<ExternalLink size={11} /></a><span>{n.meta}</span></li>)}</ul>
+        </td></tr>];
+      })}</tbody>
+    </table></div>
+  </section>;
+}
+
+// ---------- TikTok ----------
+function TikTokView({ items }: { items: Signal[] }) {
+  return <section className="panel">
+    <Heading title="TikTok trending topics · Indonesia" action={<span className="muted-action">3 related videos opened per topic</span>} />
+    <ul className="fyp-list">{items.map(s => <li key={s.id} className="fyp-item">
+      <div className="fyp-item-head"><span className="fyp-rank">{s.rank}</span><strong>{s.title}</strong><span className="kw-tag">{s.volume_text} views</span>{s.category && <span className="kw-tag hm">{s.category}</span>}</div>
+      {s.context && <p className="fyp-context">{s.context}</p>}
+      <div className="fyp-videos">{s.samples.map((v, i) => <article key={i} className="fyp-video">
+        <header><a href={v.author ? `https://www.tiktok.com/@${v.author}` : undefined} target="_blank" rel="noreferrer">@{v.author ?? '–'}</a><span>{v.ago}</span></header>
+        <p title={v.caption}>{(v.caption ?? '').slice(0, 160)}{(v.caption ?? '').length > 160 ? '…' : ''}</p>
+        <footer><span>▶ {v.views ?? '–'}</span><span>♥ {v.likes ?? '–'}</span><span>💬 {v.comments ?? '–'}</span><span>🔖 {v.saves ?? '–'}</span></footer>
+        {v.sound && <small>♫ {v.sound}</small>}
+      </article>)}</div>
+    </li>)}</ul>
+  </section>;
+}
+
+// ---------- X ----------
+function XView({ items }: { items: Signal[] }) {
+  const [feed, setFeed] = useState<'trending' | 'for_you'>('trending');
+  const [showPromo, setShowPromo] = useState(false);
+  const rows = items.filter(s => s.feed === feed && (showPromo || s.is_organic !== false));
+  const hidden = items.filter(s => s.feed === feed && s.is_organic === false).length;
+  return <section className="panel">
+    <Heading title={feed === 'trending' ? 'X · Trending in Indonesia' : 'X · Explore “For you”'} action={<div className="flex gap-1.5">
+      <button className={`filter-chip ${feed === 'trending' ? 'active' : ''}`} onClick={() => setFeed('trending')}>Trending</button>
+      <button className={`filter-chip ${feed === 'for_you' ? 'active' : ''}`} onClick={() => setFeed('for_you')}>For you</button>
+      <button className={`filter-chip ${showPromo ? 'active' : ''}`} onClick={() => setShowPromo(!showPromo)}>{showPromo ? 'Hide' : 'Show'} promo ({hidden})</button>
+    </div>} />
+    <ul className="fyp-list">{rows.map(s => <li key={s.id} className={`fyp-item ${s.is_organic === false ? 'promo' : ''}`}>
+      <div className="fyp-item-head"><span className="fyp-rank">{s.rank}</span><strong>{s.title}</strong>
+        {s.category && <span className="kw-tag hm">{s.category}</span>}{s.volume_text && <span className="kw-tag">{s.volume_text}</span>}
+        <span className={`status-pill ${s.is_organic === false ? 'bad' : 'on'}`} title={s.organic_reason ?? ''}>{s.is_organic === false ? 'Promo / brand' : 'Organic'}</span>
+      </div>
+      {s.context && <p className="fyp-context">{s.context}</p>}
+      {s.samples.length > 0 && <ul className="fyp-samples">{s.samples.map((t, i) => <li key={i}><a href={t.url} target="_blank" rel="noreferrer">{t.user}: {(t.text ?? '').slice(0, 140)}<ExternalLink size={11} /></a><span>{t.metrics}</span></li>)}</ul>}
+    </li>)}</ul>
+  </section>;
+}
