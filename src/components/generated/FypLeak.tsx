@@ -28,7 +28,7 @@ const ago = (iso: string) => { const h = (Date.now() - Date.parse(iso)) / 36e5; 
 const median = (xs: number[]) => { if (!xs.length) return 0; const v = [...xs].sort((a, b) => a - b); const m = v.length >> 1; return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
 
 const STOP = new Set(('yang dan di ke dari untuk dengan ini itu ada pada akan atau juga tidak bisa dalam sudah saat jadi oleh karena para lagi baru soal hari jam kata usai vs the and for with from you are this that was how what new live 2025 2026 indonesia trending '
-  + 'league liga champions premier final series film episode video viral berita news crash prices price match laga menang kalah hasil jadwal klasemen standings official resmi digelar diumumkan umumkan menayangkan tayang').split(' '));
+  + 'league liga champions premier final series film episode video viral berita news crash prices price match laga menang kalah hasil jadwal klasemen standings official resmi digelar diumumkan umumkan menayangkan tayang moment momen trip time today people best great').split(' '));
 const tokens = (s: string) => new Set((s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9\s#]/g, ' ').match(/[a-z0-9#]{4,}/g) ?? []).map(t => t.replace(/^#/, '')).filter(t => !STOP.has(t)));
 const signalTokens = (s: Signal) => tokens([s.title, ...(s.related_terms ?? [])].join(' '));
 
