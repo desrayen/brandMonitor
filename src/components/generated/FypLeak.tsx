@@ -27,7 +27,8 @@ const wib = (iso: string) => new Date(iso).toLocaleString('id-ID', { timeZone: '
 const ago = (iso: string) => { const h = (Date.now() - Date.parse(iso)) / 36e5; return h < 1 ? `${Math.max(1, Math.round(h * 60))} mnt lalu` : h < 48 ? `${Math.round(h)} jam lalu` : `${Math.round(h / 24)} hari lalu`; };
 const median = (xs: number[]) => { if (!xs.length) return 0; const v = [...xs].sort((a, b) => a - b); const m = v.length >> 1; return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
 
-const STOP = new Set('yang dan di ke dari untuk dengan ini itu ada pada akan atau juga tidak bisa dalam sudah saat jadi oleh karena para lagi baru soal hari jam kata usai vs the and for with from you are this that was how what new live 2025 2026 indonesia trending'.split(' '));
+const STOP = new Set(('yang dan di ke dari untuk dengan ini itu ada pada akan atau juga tidak bisa dalam sudah saat jadi oleh karena para lagi baru soal hari jam kata usai vs the and for with from you are this that was how what new live 2025 2026 indonesia trending '
+  + 'league liga champions premier final series film episode video viral berita news crash prices price match laga menang kalah hasil jadwal klasemen standings official resmi digelar diumumkan umumkan menayangkan tayang').split(' '));
 const tokens = (s: string) => new Set((s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9\s#]/g, ' ').match(/[a-z0-9#]{4,}/g) ?? []).map(t => t.replace(/^#/, '')).filter(t => !STOP.has(t)));
 const signalTokens = (s: Signal) => tokens([s.title, ...(s.related_terms ?? [])].join(' '));
 
@@ -100,14 +101,19 @@ export function FypLeak() {
   const by = (source: Signal['source'], feed?: Signal['feed']) => sig.filter(s => s.source === source && (!feed || s.feed === feed));
 
   // Cross-source radar: a topic gets stronger the more independent sources mention it.
+  // Two items "match" when they share a rare token (seen in few items overall) or at least two tokens.
   const radar = useMemo(() => {
     const pool = sig.filter(s => s.source !== 'x' || s.is_organic !== false);
+    const st = new Map(pool.map(s => [s.id, signalTokens(s)]));
     const igTok = igFeed.map(p => ({ p, t: tokens(`${p.caption ?? ''}`) }));
+    const df = new Map<string, number>();
+    [...st.values(), ...igTok.map(x => x.t)].forEach(t => t.forEach(w => df.set(w, (df.get(w) ?? 0) + 1)));
+    const matches = (a: Set<string>, b: Set<string>) => { const shared = [...a].filter(w => b.has(w)); return shared.length >= 2 || shared.some(w => w.length >= 5 && (df.get(w) ?? 0) <= 6); };
     const items = pool.map(s => {
-      const t = signalTokens(s);
+      const t = st.get(s.id)!;
       const hits = new Map<string, Signal[]>();
-      pool.forEach(o => { if (o.id === s.id || o.source === s.source) return; const ot = signalTokens(o); if ([...t].some(x => ot.has(x))) { const k = o.source; hits.set(k, [...(hits.get(k) ?? []), o]); } });
-      const ig = igTok.filter(({ t: pt }) => { let n = 0; t.forEach(x => { if (pt.has(x)) n++; }); return n >= Math.min(2, t.size); }).map(x => x.p);
+      pool.forEach(o => { if (o.id === s.id || o.source === s.source) return; if (matches(t, st.get(o.id)!)) hits.set(o.source, [...(hits.get(o.source) ?? []), o]); });
+      const ig = igTok.filter(x => matches(t, x.t)).map(x => x.p);
       const sources = 1 + hits.size + (ig.length ? 1 : 0);
       return { s, hits, ig, sources };
     }).filter(x => x.sources >= 2);
