@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Flame, Search, Music2, AtSign, Users, Star, ExternalLink, Loader2, Radar, ChevronDown, ChevronRight, Zap, Clock } from 'lucide-react';
+import { Flame, Search, Music2, AtSign, Users, Star, ExternalLink, Loader2, Radar, ChevronDown, ChevronRight, Zap, Clock, Hash, LayoutGrid } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { StatCard } from '../StatCard';
 import { EChart } from '../charts/EChart';
@@ -96,6 +96,7 @@ export function FypLeak() {
   const [kol, setKol] = useState<Post[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('radar');
+  const [view, setView] = useState<'signals' | 'keywords'>('signals');
   const [windowH, setWindowH] = useState(24);
   const [history, setHistory] = useState<Signal[] | null>(null);
   // Full signal history (last 45 days) — only needed for the “Siapa duluan” timeline, loaded on first open.
@@ -198,6 +199,10 @@ export function FypLeak() {
   return <section className="fyp-leak">
     <div className="threads-filters">
       <DateRangePicker value={range} onChange={setRange} dataDays={runDays} />
+      <div className="fyp-viewswitch" role="tablist" aria-label="View">
+        <button role="tab" aria-selected={view === 'signals'} className={view === 'signals' ? 'active' : ''} onClick={() => setView('signals')}><LayoutGrid size={13} />Signals</button>
+        <button role="tab" aria-selected={view === 'keywords'} className={view === 'keywords' ? 'active' : ''} onClick={() => setView('keywords')}><Hash size={13} />Keyword Counter</button>
+      </div>
       <label className="threads-select"><span>Snapshot</span>
         <select value={pick} onChange={e => setPick(e.target.value)}>
           {inRange.length === 0 && <option value="">No snapshots in this period</option>}
@@ -211,6 +216,7 @@ export function FypLeak() {
       {latestRun && <p className="threads-meta !m-0"><span className="live-dot" />{merged ? `${picked.length} snapshots merged · newest ${ago(latestRun.started_at)}` : `Collected ${wib(latestRun.started_at)} WIB (${ago(latestRun.started_at)})${latestRun.notes ? ` · ${latestRun.notes}` : ''}`}</p>}
     </div>
 
+    {view === 'keywords' ? (signals === null ? <div className="state-panel"><Loader2 size={18} className="auth-spin" /><p>Loading snapshot…</p></div> : <div className="mt-4"><KeywordView signals={sig} posts={igFeed} /></div>) : <>
     <section className="kpi-grid fyp-kpis">
       <StatCard icon={<Radar size={18} />} label="Cross-source topics" value={radar.length} tint="brand" hint="Topics found in at least two sources (Google Trends, TikTok, X, HM/KOL captions)" />
       <StatCard icon={<Zap size={18} />} label="IG breakouts" value={breakouts} sub={`of ${igFeed.length} HM/KOL posts · ${windowLabel}`} tint="warning" hint="Likes ≥ 3× the account median, or ≥ 1.5× with likes per hour ≥ 3× the account's usual pace" />
@@ -230,6 +236,7 @@ export function FypLeak() {
       : tab === 'gt' ? <GoogleView items={by('google_trends')} />
       : tab === 'tt' ? <TikTokView items={by('tiktok')} />
       : <XView items={by('x')} />}
+    </>}
   </section>;
 }
 
@@ -529,5 +536,127 @@ function LeadView({ radar, history, posts, anchor }: { radar: RadarItem[]; histo
         </li>;
       })}</ul>
     </section>
+  </div>;
+}
+
+// ---------- Keyword counter (1/2/3-word n-grams + ranking + bubble chart) ----------
+const KW_STOP = new Set(`yang dan di ke dari untuk dengan ini itu ada pada akan atau juga tidak tak bisa dalam sudah telah saat jadi oleh karena para lagi baru soal kata usai ya yg dgn utk aja aku kamu kita kami mereka dia ia nya pun sih kok deh dong lah kah tuh nih gak ga nggak enggak bukan masih hanya cuma sama seperti bagi hingga sampai agar supaya bahwa kalau jika ketika setelah sebelum sejak antara atas bawah tentang tersebut begitu sangat lebih paling semua setiap banyak sedikit beberapa apa siapa mana kenapa mengapa bagaimana kapan berapa adalah merupakan menjadi membuat buat bikin punya mau ingin harus sudah belum pernah sedang akan bakal tetap terus kembali the a an and or of to in on at for with from by as is are was were be been this that these those it its you your we our they their he she his her him them i me my not no so but if then than too very can will just about into over after before up down out more most new via vs amp rt video watch live today news update full official episode part`.split(/\s+/));
+
+const MEDIA_JUNK = /^(fyp|fypシ|fypage|viral|foryou|foryoupage|xyzbca|trending|reels|tiktok|https?|www|com|co|id)$/;
+
+type KwDoc = { src: 'google' | 'tiktok' | 'x' | 'hm'; title: string; parts: string[] };
+type Kw = { key: string; n: number; count: number; srcs: Record<string, number>; example: string };
+
+function kwPhrases(text: string): string[][] {
+  return text.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
+    .replace(/https?:\/\/\S+/g, ' ').replace(/@[\w.]+/g, ' ')
+    .split(/[.,!?;:()[\]{}"“”'‘’|/\\\-–—•·…\n]+/)
+    .map(seg => (seg.match(/[a-z0-9#]+/g) ?? []).map(w => w.replace(/^#+/, '')).filter(w => w.length >= 2 && !/^\d+$/.test(w) && !MEDIA_JUNK.test(w)))
+    .filter(ws => ws.length);
+}
+
+function countKeywords(docs: KwDoc[]): Kw[] {
+  const m = new Map<string, Kw>();
+  docs.forEach(d => {
+    const seen = new Set<string>();
+    d.parts.forEach(part => kwPhrases(part).forEach(ws => {
+      for (let n = 1; n <= 3; n++) for (let i = 0; i + n <= ws.length; i++) {
+        const g = ws.slice(i, i + n);
+        if (KW_STOP.has(g[0]) || KW_STOP.has(g[n - 1])) continue;
+        if (n === 1 && g[0].length < 3) continue;
+        if (n > 1 && new Set(g).size < n) continue;
+        seen.add(`${n}|${g.join(' ')}`);
+      }
+    }));
+    seen.forEach(k => {
+      const [n, key] = [+k.slice(0, 1), k.slice(2)];
+      let e = m.get(k); if (!e) { e = { key, n, count: 0, srcs: {}, example: d.title }; m.set(k, e); }
+      e.count++; e.srcs[d.src] = (e.srcs[d.src] ?? 0) + 1;
+    });
+  });
+  // drop one-offs; drop a shorter n-gram when a longer one fully explains it (same count)
+  const all = [...m.values()].filter(k => k.count >= 2);
+  const longer = all.filter(k => k.n > 1);
+  return all.filter(k => !longer.some(l => l.n > k.n && l.count === k.count && ` ${l.key} `.includes(` ${k.key} `)))
+    .sort((a, b) => b.count - a.count || b.n - a.n || a.key.localeCompare(b.key));
+}
+
+const KW_SRC: { key: KwDoc['src']; label: string; color: string }[] = [
+  { key: 'google', label: 'Google', color: '#2395ff' }, { key: 'tiktok', label: 'TikTok', color: '#fd6a94' },
+  { key: 'x', label: 'X', color: '#e4e4e7' }, { key: 'hm', label: 'HM/KOL', color: '#ff743d' },
+];
+const KW_N_COLOR = ['', '#f4b9c4', '#9cc9ff', '#9be8bd'];
+
+function bubbleOption(items: Kw[]): EChartsCoreOption {
+  const max = Math.max(1, ...items.map(k => k.count));
+  return {
+    animationDuration: 600, textStyle: { fontFamily: theme.sans },
+    tooltip: { backgroundColor: theme.card, borderColor: theme.borderStrong, textStyle: { color: theme.text, fontSize: 12 },
+      formatter: (p: { data: { kw: Kw } }) => { const k = p.data.kw; return `<b>${k.key}</b> · ${k.n} kata<br/>${k.count} mentions<br/>${KW_SRC.filter(s => k.srcs[s.key]).map(s => `${s.label}: ${k.srcs[s.key]}`).join(' · ')}`; } },
+    series: [{
+      type: 'graph', layout: 'force', roam: false, draggable: true,
+      force: { repulsion: 60, gravity: 0.12, edgeLength: 10, friction: 0.15, layoutAnimation: true },
+      data: items.map(k => {
+        const size = 34 + 120 * Math.sqrt(k.count / max);
+        const font = Math.max(9, Math.min(22, size / Math.max(4, k.key.length * 0.62)));
+        return { name: k.key, kw: k, value: k.count, symbolSize: size,
+          itemStyle: { color: KW_N_COLOR[k.n], opacity: 0.9 },
+          label: { show: true, color: '#18181b', fontSize: font, fontWeight: 600, lineHeight: font * 1.1, overflow: 'break', width: size * 0.86,
+            formatter: `{a|${k.key}}\n{b|${k.count}}`, rich: { a: { fontSize: font, fontWeight: 600, color: '#18181b' }, b: { fontSize: Math.max(8, font * 0.62), color: '#52525b' } } } };
+      }),
+      emphasis: { scale: 1.06, itemStyle: { opacity: 1 } },
+    }],
+  };
+}
+
+function KeywordView({ signals, posts }: { signals: Signal[]; posts: FeedPost[] }) {
+  const [n, setN] = useState<0 | 1 | 2 | 3>(0);
+  const [srcOn, setSrcOn] = useState<Record<string, boolean>>({ google: true, tiktok: true, x: true, hm: false });
+  const [q, setQ] = useState('');
+  const [limit, setLimit] = useState(50);
+  const docs = useMemo<KwDoc[]>(() => {
+    const d: KwDoc[] = signals.filter(s => s.is_organic !== false).map(s => ({
+      src: s.source === 'google_trends' ? 'google' : s.source === 'tiktok' ? 'tiktok' : 'x', title: s.title,
+      // only text that comes from the platforms themselves (not the AI-written context)
+      parts: [s.title, ...(s.related_terms ?? []), ...(s.samples ?? []).map(v => [v.title, v.caption, v.text].filter(Boolean).join(' . '))],
+    }));
+    posts.forEach(p => d.push({ src: 'hm', title: `@${p.account_handle}: ${(p.caption ?? '').slice(0, 60)}`, parts: [p.caption ?? ''] }));
+    return d;
+  }, [signals, posts]);
+  const all = useMemo(() => countKeywords(docs.filter(d => srcOn[d.src])), [docs, srcOn]);
+  const list = useMemo(() => all.filter(k => (!n || k.n === n) && (!q || k.key.includes(q.toLowerCase()))), [all, n, q]);
+  const bubbles = useMemo(() => bubbleOption(list.slice(0, 40)), [list]);
+  const maxCount = list[0]?.count ?? 1;
+  const nDocs = docs.filter(d => srcOn[d.src]).length;
+  return <div className="an-stack">
+    <div className="kw-toolbar">
+      <div className="flex flex-wrap gap-1.5">{([[0, 'Semua'], [1, '1 kata'], [2, '2 kata'], [3, '3 kata']] as const).map(([v, l]) =>
+        <button key={v} className={`filter-chip ${n === v ? 'active' : ''}`} onClick={() => setN(v)}>{l}{v ? <span className="kw-n-dot" style={{ background: KW_N_COLOR[v] }} /> : null}</button>)}</div>
+      <span className="w-px h-5 bg-[#27272a] max-md:hidden" />
+      <div className="flex flex-wrap gap-1.5">{KW_SRC.map(s => <button key={s.key} className={`filter-chip ${srcOn[s.key] ? 'active' : ''}`} onClick={() => setSrcOn({ ...srcOn, [s.key]: !srcOn[s.key] })}><span className="kw-n-dot" style={{ background: s.color }} />{s.label}</button>)}</div>
+      <div className="threads-search ml-auto"><Search size={13} /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Cari keyword" /></div>
+    </div>
+    <p className="fyp-note !m-0">{fmt(list.length)} keyword dari {fmt(nDocs)} sinyal. Mentions = jumlah sinyal (trend/topik/post) yang memuat keyword itu. Dihitung dari judul, related searches, judul berita, caption video & tweet — bukan dari ringkasan buatan AI. Promo/brand di X tidak dihitung.{srcOn.hm ? ' Caption HM/KOL tersimpan sebagai ringkasan berbahasa Inggris.' : ''}</p>
+    {list.length === 0 ? <section className="state-panel"><span className="state-icon"><Search size={20} /></span><h3>Belum ada keyword</h3><p>Coba aktifkan sumber lain atau pilih periode yang punya snapshot.</p></section> : <>
+      <section className="panel">
+        <Heading title="Keyword bubble" action={<span className="muted-action">Ukuran = jumlah mentions · warna = 1 / 2 / 3 kata · bisa di-drag</span>} />
+        <EChart option={bubbles} height={520} renderer="canvas" ariaLabel="Bubble chart of the most mentioned keywords" />
+      </section>
+      <section className="panel">
+        <Heading title="Ranking keyword" action={<span className="muted-action">Top {Math.min(limit, list.length)} dari {fmt(list.length)}</span>} />
+        <div className="table-scroll"><table className="kw-table">
+          <thead><tr><th>#</th><th>Keyword</th><th>Kata</th><th>Mentions</th><th>Sumber</th><th>Contoh</th></tr></thead>
+          <tbody>{list.slice(0, limit).map((k, i) => <tr key={`${k.n}${k.key}`}>
+            <td>{i + 1}</td>
+            <td><strong className="font-medium">{k.key}</strong></td>
+            <td><span className="kw-n" style={{ background: KW_N_COLOR[k.n] }}>{k.n}</span></td>
+            <td><div className="kw-bar"><span style={{ width: `${(k.count / maxCount) * 100}%` }} /><b>{k.count}</b></div></td>
+            <td><div className="kw-srcs">{KW_SRC.filter(s => k.srcs[s.key]).map(s => <span key={s.key} title={`${s.label}: ${k.srcs[s.key]}`}><i style={{ background: s.color }} />{k.srcs[s.key]}</span>)}</div></td>
+            <td className="fyp-cap" title={k.example}>{k.example}</td>
+          </tr>)}</tbody>
+        </table></div>
+        {list.length > limit && <div className="flex justify-center pt-4"><button className="filter-chip" onClick={() => setLimit(limit + 50)}>Tampilkan lagi ({fmt(list.length - limit)})</button></div>}
+      </section>
+    </>}
   </div>;
 }
