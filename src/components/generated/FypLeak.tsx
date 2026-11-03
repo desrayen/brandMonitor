@@ -540,7 +540,7 @@ function LeadView({ radar, history, posts, anchor }: { radar: RadarItem[]; histo
 }
 
 // ---------- Keyword counter (1/2/3-word n-grams + ranking + bubble chart) ----------
-const KW_STOP = new Set(`yang dan di ke dari untuk dengan ini itu ada pada akan atau juga tidak tak bisa dalam sudah telah saat jadi oleh karena para lagi baru soal kata usai ya yg dgn utk aja aku kamu kita kami mereka dia ia nya pun sih kok deh dong lah kah tuh nih gak ga nggak enggak bukan masih hanya cuma sama seperti bagi hingga sampai agar supaya bahwa kalau jika ketika setelah sebelum sejak antara atas bawah tentang tersebut begitu sangat lebih paling semua setiap banyak sedikit beberapa apa siapa mana kenapa mengapa bagaimana kapan berapa adalah merupakan menjadi membuat buat bikin punya mau ingin harus sudah belum pernah sedang akan bakal tetap terus kembali the a an and or of to in on at for with from by as is are was were be been this that these those it its you your we our they their he she his her him them i me my not no so but if then than too very can will just about into over after before up down out more most new via vs amp rt video watch live today news update full official episode part`.split(/\s+/));
+const KW_STOP = new Set(`yang dan di ke dari untuk dengan ini itu ada pada akan atau juga tidak tak bisa dalam sudah telah saat jadi oleh karena para lagi baru soal kata usai ya yg dgn utk aja aku kamu kita kami mereka dia ia nya pun sih kok deh dong lah kah tuh nih gak ga nggak enggak bukan masih hanya cuma sama seperti bagi hingga sampai agar supaya bahwa kalau jika ketika setelah sebelum sejak antara atas bawah tentang tersebut begitu sangat lebih paling semua setiap banyak sedikit beberapa apa siapa mana kenapa mengapa bagaimana kapan berapa adalah merupakan menjadi membuat buat bikin punya mau ingin harus sudah belum pernah sedang akan bakal tetap terus kembali the a an and or of to in on at for with from by as is are was were be been this that these those it its you your we our they their he she his her him them i me my not no so but if then than too very can will just about into over after before up down out more most new via vs amp rt video watch live today news update full official episode part klasemen standings fc vs prediksi jadwal skor hasil streaming susunan pemain siaran nonton tonton saksikan hari jam menit tahun bulan minggu orang warga minta bawa ungkap hadir kisah momen cara cek terbaru lengkap resmi akhirnya ternyata langsung gratis kali bikin netizen`.split(/\s+/));
 
 const MEDIA_JUNK = /^(fyp|fypシ|fypage|viral|foryou|foryoupage|xyzbca|trending|reels|tiktok|https?|www|com|co|id)$/;
 
@@ -563,7 +563,7 @@ function countKeywords(docs: KwDoc[]): Kw[] {
       for (let n = 1; n <= 3; n++) for (let i = 0; i + n <= ws.length; i++) {
         const g = ws.slice(i, i + n);
         if (KW_STOP.has(g[0]) || KW_STOP.has(g[n - 1])) continue;
-        if (n === 1 && g[0].length < 3) continue;
+        if (g[0].length < 3 || g[n - 1].length < 3) continue;
         if (n > 1 && new Set(g).size < n) continue;
         seen.add(`${n}|${g.join(' ')}`);
       }
@@ -585,26 +585,41 @@ const KW_SRC: { key: KwDoc['src']; label: string; color: string }[] = [
   { key: 'google', label: 'Google', color: '#2395ff' }, { key: 'tiktok', label: 'TikTok', color: '#fd6a94' },
   { key: 'x', label: 'X', color: '#e4e4e7' }, { key: 'hm', label: 'HM/KOL', color: '#ff743d' },
 ];
-const KW_N_COLOR = ['', '#f4b9c4', '#9cc9ff', '#9be8bd'];
+const KW_N_COLOR = ['', '#f2c4cb', '#b9d7fb', '#bfe9cf'];
+
+/** Greedy circle packing: biggest first, each next circle on a spiral around the centre where it doesn't overlap. */
+function packCircles(rs: number[]): { x: number; y: number }[] {
+  const out: { x: number; y: number; r: number }[] = [];
+  rs.forEach(r => {
+    if (!out.length) { out.push({ x: 0, y: 0, r }); return; }
+    for (let a = 0, d = 0; ; a += 0.35, d += 0.6) {
+      const x = Math.cos(a) * d * 1.35, y = Math.sin(a) * d * 0.8; // wider than tall, like the reference
+      if (out.every(c => Math.hypot(c.x - x, c.y - y) >= c.r + r + 3)) { out.push({ x, y, r }); return; }
+    }
+  });
+  return out;
+}
 
 function bubbleOption(items: Kw[]): EChartsCoreOption {
   const max = Math.max(1, ...items.map(k => k.count));
+  const radius = items.map(k => 22 + 58 * Math.sqrt(k.count / max));
+  const pos = packCircles(radius);
   return {
-    animationDuration: 600, textStyle: { fontFamily: theme.sans },
-    tooltip: { backgroundColor: theme.card, borderColor: theme.borderStrong, textStyle: { color: theme.text, fontSize: 12 },
+    animationDuration: 600, textStyle: { fontFamily: 'Georgia, \'Times New Roman\', serif' },
+    tooltip: { backgroundColor: theme.card, borderColor: theme.borderStrong, textStyle: { color: theme.text, fontSize: 12, fontFamily: theme.sans },
       formatter: (p: { data: { kw: Kw } }) => { const k = p.data.kw; return `<b>${k.key}</b> · ${k.n} kata<br/>${k.count} mentions<br/>${KW_SRC.filter(s => k.srcs[s.key]).map(s => `${s.label}: ${k.srcs[s.key]}`).join(' · ')}`; } },
     series: [{
-      type: 'graph', layout: 'force', roam: false, draggable: true,
-      force: { repulsion: 60, gravity: 0.12, edgeLength: 10, friction: 0.15, layoutAnimation: true },
-      data: items.map(k => {
-        const size = 34 + 120 * Math.sqrt(k.count / max);
-        const font = Math.max(9, Math.min(22, size / Math.max(4, k.key.length * 0.62)));
-        return { name: k.key, kw: k, value: k.count, symbolSize: size,
-          itemStyle: { color: KW_N_COLOR[k.n], opacity: 0.9 },
-          label: { show: true, color: '#18181b', fontSize: font, fontWeight: 600, lineHeight: font * 1.1, overflow: 'break', width: size * 0.86,
-            formatter: `{a|${k.key}}\n{b|${k.count}}`, rich: { a: { fontSize: font, fontWeight: 600, color: '#18181b' }, b: { fontSize: Math.max(8, font * 0.62), color: '#52525b' } } } };
+      type: 'graph', layout: 'none', roam: false, left: 'center', top: 'middle', width: '96%', height: '94%',
+      data: items.map((k, i) => {
+        const r = radius[i];
+        const longest = Math.max(...k.key.split(' ').map(w => w.length));
+        const font = Math.max(8, Math.min(r * 0.62, (r * 1.75) / Math.max(3, longest * 0.58)));
+        return { name: `${k.n}|${k.key}`, kw: k, value: k.count, x: pos[i].x, y: pos[i].y, symbolSize: r * 2,
+          itemStyle: { color: KW_N_COLOR[k.n], opacity: 0.92 },
+          label: { show: true, formatter: `{a|${k.key.replace(/ /g, '\n')}}\n{b|${k.count}${i < 3 ? ' mentions' : ''}}`,
+            rich: { a: { fontSize: font, lineHeight: font * 1.05, color: '#18181b', fontFamily: 'Georgia, serif', align: 'center' }, b: { fontSize: Math.max(8, font * 0.5), lineHeight: font * 0.8, color: '#52525b', fontFamily: theme.sans, align: 'center' } } } };
       }),
-      emphasis: { scale: 1.06, itemStyle: { opacity: 1 } },
+      emphasis: { scale: 1.04, itemStyle: { opacity: 1 } },
     }],
   };
 }
@@ -639,8 +654,8 @@ function KeywordView({ signals, posts }: { signals: Signal[]; posts: FeedPost[] 
     <p className="fyp-note !m-0">{fmt(list.length)} keyword dari {fmt(nDocs)} sinyal. Mentions = jumlah sinyal (trend/topik/post) yang memuat keyword itu. Dihitung dari judul, related searches, judul berita, caption video & tweet — bukan dari ringkasan buatan AI. Promo/brand di X tidak dihitung.{srcOn.hm ? ' Caption HM/KOL tersimpan sebagai ringkasan berbahasa Inggris.' : ''}</p>
     {list.length === 0 ? <section className="state-panel"><span className="state-icon"><Search size={20} /></span><h3>Belum ada keyword</h3><p>Coba aktifkan sumber lain atau pilih periode yang punya snapshot.</p></section> : <>
       <section className="panel">
-        <Heading title="Keyword bubble" action={<span className="muted-action">Ukuran = jumlah mentions · warna = 1 / 2 / 3 kata · bisa di-drag</span>} />
-        <EChart option={bubbles} height={520} renderer="canvas" ariaLabel="Bubble chart of the most mentioned keywords" />
+        <Heading title="Keyword bubble" action={<span className="muted-action">Ukuran = jumlah mentions · warna = 1 / 2 / 3 kata · top 40</span>} />
+        <EChart option={bubbles} height={560} renderer="canvas" ariaLabel="Bubble chart of the most mentioned keywords" />
       </section>
       <section className="panel">
         <Heading title="Ranking keyword" action={<span className="muted-action">Top {Math.min(limit, list.length)} dari {fmt(list.length)}</span>} />
