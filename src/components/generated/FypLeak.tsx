@@ -11,7 +11,7 @@ import type { EChartsCoreOption } from 'echarts/core';
 
 // ---------- types ----------
 type Run = { id: string; started_at: string; finished_at: string | null; sources: string[]; status: string; summary: string | null; notes: string | null };
-type Sample = { url?: string; title?: string; meta?: string; author?: string; ago?: string; views?: string; likes?: string; comments?: string; saves?: string; caption?: string; sound?: string; hashtags?: string[]; text?: string; metrics?: string; user?: string };
+type Sample = { url?: string; title?: string; meta?: string; author?: string; ago?: string; views?: string; likes?: string; comments?: string; saves?: string; caption?: string; sound?: string; hashtags?: string[]; text?: string; metrics?: string; user?: string; time?: string };
 type Signal = {
   id: number; run_id: string; captured_at: string; source: 'google_trends' | 'tiktok' | 'x'; feed: '4h' | '24h' | 'trending' | 'for_you';
   rank: number | null; title: string; volume_text: string | null; volume_num: number | null; growth_text: string | null; started_text: string | null; status_text: string | null;
@@ -401,7 +401,7 @@ function XView({ items }: { items: Signal[] }) {
 // ---------- Siapa duluan (first-mover timeline) ----------
 type Platform = 'x' | 'hm' | 'google' | 'tiktok';
 const PLATS: { key: Platform; label: string; color: string; how: string }[] = [
-  { key: 'x', label: 'X', color: '#e4e4e7', how: 'first snapshot that captured the trend' },
+  { key: 'x', label: 'X', color: '#e4e4e7', how: 'oldest sampled post, else the first snapshot that captured it' },
   { key: 'hm', label: 'HM/KOL (IG)', color: '#ff743d', how: 'publish time of the first matching post' },
   { key: 'google', label: 'Google Trends', color: '#2395ff', how: 'trend start (snapshot time minus “started … ago”)' },
   { key: 'tiktok', label: 'TikTok', color: '#fd6a94', how: 'upload time of the oldest related video' },
@@ -456,7 +456,7 @@ function computeLeads(radar: RadarItem[], history: Signal[], igPosts: Post[], an
       const p = PLAT_OF(h);
       if (p === 'google') put(p, agoTime(h.started_text, cap) ?? cap);
       else if (p === 'tiktok') { const vids = (h.samples ?? []).map(v => agoTime(v.ago, cap)).filter((x): x is number => x != null); put(p, vids.length ? Math.min(...vids) : cap); }
-      else put(p, cap);
+      else { const posts = (h.samples ?? []).map(v => v.time ? Date.parse(v.time) : NaN).filter(Number.isFinite); put(p, posts.length ? Math.min(cap, ...posts) : cap); }
     });
     const igHits = ig.filter(x => hit(x.t, dfIg, 40));
     igHits.forEach(x => put('hm', Date.parse(x.p.published_at)));
@@ -518,7 +518,7 @@ function LeadView({ radar, history, posts, anchor }: { radar: RadarItem[]; histo
       <Heading title="Siapa duluan · timeline per topik" action={<span className="muted-action">Titik = kapan platform pertama kali memunculkan topik · garis = jeda dari yang pertama sampai yang terakhir</span>} />
       <EChart option={opt!} height={Math.max(220, leads.length * 42 + 80)} ariaLabel="Timeline of which platform surfaced each topic first" />
       <ul className="lead-notes">{PLATS.map(p => <li key={p.key}><span className="lead-dot" style={{ background: p.color }} />{p.label}: {p.how}</li>)}</ul>
-      <p className="fyp-note">X dihitung dari snapshot pertama yang menangkapnya, jadi X bisa tampak lebih telat dari aslinya. Makin sering skill dijalankan, makin presisi timeline ini. Topik dicocokkan lewat kata kunci, 7 hari ke belakang dari snapshot.</p>
+      <p className="fyp-note">Untuk X dipakai waktu post tertua dari sampel (mulai update berikutnya); snapshot lama hanya punya jam snapshot, jadi X di data lama tampak lebih telat dari aslinya. Makin sering skill dijalankan, makin presisi timeline ini. Topik dicocokkan lewat kata kunci, 7 hari ke belakang dari snapshot.</p>
     </section>
     <section className="panel">
       <Heading title="Urutan per topik" />
