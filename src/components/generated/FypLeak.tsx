@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Flame, Search, Music2, AtSign, Users, Star, ExternalLink, Loader2, Radar, ChevronDown, ChevronRight, Zap, Clock, Hash, LayoutGrid } from 'lucide-react';
+import { Flame, Search, Music2, AtSign, Users, Star, ExternalLink, Loader2, Radar, ChevronDown, ChevronRight, Zap, Clock, Hash, LayoutGrid, Hourglass } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { StatCard } from '../StatCard';
 import { EChart } from '../charts/EChart';
 import { hBarOption, theme } from '../charts/options';
 import { DateRangePicker, fmtRange, type DateRange } from './DateRangePicker';
+import { FypLifespan } from './FypLifespan';
 import type { EChartsCoreOption } from 'echarts/core';
 
 // ---------- types ----------
@@ -23,7 +24,7 @@ type Post = {
   likes: number | null; comments: number | null; views: number | null; likes_hidden: boolean | null; viral_category: string | null; primary_trigger: string | null;
 };
 type FeedPost = Post & { src: 'HM' | 'KOL'; lift: number; perHour: number; ageH: number; breakout: boolean };
-type Tab = 'radar' | 'lead' | 'ig' | 'gt' | 'tt' | 'x';
+type Tab = 'radar' | 'lead' | 'life' | 'ig' | 'gt' | 'tt' | 'x';
 
 // ---------- helpers ----------
 const fmt = (n: number | null | undefined) => n == null ? '–' : n.toLocaleString('en-US');
@@ -190,7 +191,7 @@ export function FypLeak() {
   if (error) return <section className="state-panel" role="alert"><h3>We couldn't load The FYP Leak</h3><p>{error}</p></section>;
   if (runs === null) return <div className="state-panel"><Loader2 size={18} className="auth-spin" /><p>Getting the latest signals…</p></div>;
 
-  const tabs: [Tab, string, React.ReactNode][] = [['radar', 'Leak Radar', <Radar size={14} />], ['lead', 'Siapa duluan', <Clock size={14} />], ['ig', 'Homeless & KOL', <Users size={14} />], ['gt', 'Google Trends', <Search size={14} />], ['tt', 'TikTok', <Music2 size={14} />], ['x', 'X', <AtSign size={14} />]];
+  const tabs: [Tab, string, React.ReactNode][] = [['radar', 'Leak Radar', <Radar size={14} />], ['lead', 'Siapa duluan', <Clock size={14} />], ['life', 'Umur & Sentimen', <Hourglass size={14} />], ['ig', 'Homeless & KOL', <Users size={14} />], ['gt', 'Google Trends', <Search size={14} />], ['tt', 'TikTok', <Music2 size={14} />], ['x', 'X', <AtSign size={14} />]];
   const breakouts = igFeed.filter(p => p.breakout).length;
   const organicX = by('x').filter(s => s.is_organic).length;
   const merged = pick === 'all' && picked.length > 1;
@@ -228,7 +229,8 @@ export function FypLeak() {
 
     <nav className="threads-subnav" aria-label="FYP Leak sections">{tabs.map(([k, label, icon]) => <button key={k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>{icon}{label}</button>)}</nav>
 
-    {inRange.length === 0 && tab !== 'ig' ? <section className="state-panel"><span className="state-icon"><Flame size={20} /></span><h3>No snapshots {runs.length ? 'in this period' : 'yet'}</h3><p>{runs.length ? 'Pick another date — days with data have an orange dot in the calendar.' : 'Run the “Metric Update The FYP Leak” skill to collect Google Trends, TikTok and X signals.'}</p></section>
+    {tab === 'life' ? <FypLifespan />
+: inRange.length === 0 && tab !== 'ig' ? <section className="state-panel"><span className="state-icon"><Flame size={20} /></span><h3>No snapshots {runs.length ? 'in this period' : 'yet'}</h3><p>{runs.length ? 'Pick another date — days with data have an orange dot in the calendar.' : 'Run the “Metric Update The FYP Leak” skill to collect Google Trends, TikTok and X signals.'}</p></section>
       : signals === null && tab !== 'ig' ? <div className="state-panel"><Loader2 size={18} className="auth-spin" /><p>Loading snapshot…</p></div>
       : tab === 'radar' ? <RadarView run={latestRun} merged={merged} radar={radar} signals={sig} />
       : tab === 'lead' ? <LeadView radar={radar} history={history} posts={allPosts} anchor={latestRun ? Date.parse(latestRun.started_at) : Date.now()} />
