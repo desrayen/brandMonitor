@@ -66,7 +66,7 @@ function scorePosts(posts: Post[], src: 'HM' | 'KOL', from: number, to: number):
     const b = base.get(p.account_handle)!;
     const lift = b.likes ? (p.likes ?? 0) / b.likes : 0;
     const ph = perHour(p);
-    return { ...p, src, lift, perHour: ph, ageH: (Date.parse(p.created_at) - Date.parse(p.published_at)) / 36e5, breakout: lift >= 3 || (b.ph > 0 && ph >= 3 * b.ph) };
+    return { ...p, src, lift, perHour: ph, ageH: (Date.parse(p.created_at) - Date.parse(p.published_at)) / 36e5, breakout: lift >= 3 || (lift >= 1.5 && b.ph > 0 && ph >= 3 * b.ph) };
   });
   return { latestCapture, feed };
 }
@@ -137,7 +137,7 @@ export function FypLeak() {
   const latestRun = picked[0] ?? null;
   // IG window: single snapshot → the N hours before it was collected; merged → the whole selected period.
   const [from, to] = useMemo(() => {
-    if (pick === 'all' && range) return [dayStart(range.start), Math.min(Date.now(), dayEnd(range.end))];
+    if (range && (pick === 'all' || !latestRun)) return [dayStart(range.start), Math.min(Date.now(), dayEnd(range.end))];
     const anchor = latestRun ? Date.parse(latestRun.started_at) : Date.now();
     return [anchor - windowH * 36e5, anchor];
   }, [pick, range, latestRun, windowH]);
@@ -185,7 +185,7 @@ export function FypLeak() {
   const breakouts = igFeed.filter(p => p.breakout).length;
   const organicX = by('x').filter(s => s.is_organic).length;
   const merged = pick === 'all' && picked.length > 1;
-  const windowLabel = pick === 'all' && range ? fmtRange(range.start, range.end) : `${windowH} h before the snapshot`;
+  const windowLabel = range && (pick === 'all' || !latestRun) ? fmtRange(range.start, range.end) : `${windowH} h before the snapshot`;
 
   return <section className="fyp-leak">
     <div className="threads-filters">
@@ -205,7 +205,7 @@ export function FypLeak() {
 
     <section className="kpi-grid fyp-kpis">
       <StatCard icon={<Radar size={18} />} label="Cross-source topics" value={radar.length} tint="brand" hint="Topics found in at least two sources (Google Trends, TikTok, X, HM/KOL captions)" />
-      <StatCard icon={<Zap size={18} />} label="IG breakouts" value={breakouts} sub={`of ${igFeed.length} HM/KOL posts · ${windowLabel}`} tint="warning" hint="Likes ≥ 3× the account median, or likes per hour ≥ 3× the account's usual pace" />
+      <StatCard icon={<Zap size={18} />} label="IG breakouts" value={breakouts} sub={`of ${igFeed.length} HM/KOL posts · ${windowLabel}`} tint="warning" hint="Likes ≥ 3× the account median, or ≥ 1.5× with likes per hour ≥ 3× the account's usual pace" />
       <StatCard icon={<Search size={18} />} label="Google Trends" value={by('google_trends').length} sub={`${by('google_trends', '4h').length} in 4 h · ${by('google_trends', '24h').length} in 24 h`} />
       <StatCard icon={<Music2 size={18} />} label="TikTok topics" value={by('tiktok').length} sub="Indonesia · Creative inspiration" />
       <StatCard icon={<AtSign size={18} />} label="X organic trends" value={organicX} sub={`${by('x').length - organicX} promo/brand removed`} />
@@ -261,7 +261,7 @@ function RadarView({ run, merged, radar, signals }: { run: Run | null; merged: b
   const radarOpt = useMemo(() => radarOption(top), [radar]); // eslint-disable-line react-hooks/exhaustive-deps
   const cats = useMemo(() => {
     const m = new Map<string, number>();
-    signals.filter(s => s.is_organic !== false && s.category).forEach(s => { const c = s.category!.split(' & ')[0]; m.set(c, (m.get(c) ?? 0) + 1); });
+    signals.filter(s => s.is_organic !== false && s.category && !/^(Trending|Only on X)/i.test(s.category)).forEach(s => { const c = s.category!.split(' & ')[0]; m.set(c, (m.get(c) ?? 0) + 1); });
     return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
   }, [signals]);
   const catOpt = useMemo(() => hBarOption({ data: cats.map(([name, value], i) => ({ name, value, color: i === 0 ? theme.orange : '#ff9466' })), format: v => `${v}`, labelWidth: 150 }), [cats]);
