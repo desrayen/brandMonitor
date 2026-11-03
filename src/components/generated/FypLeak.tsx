@@ -23,7 +23,7 @@ type Post = {
   likes: number | null; comments: number | null; views: number | null; likes_hidden: boolean | null; viral_category: string | null; primary_trigger: string | null;
 };
 type FeedPost = Post & { src: 'HM' | 'KOL'; lift: number; perHour: number; ageH: number; breakout: boolean };
-type Tab = 'radar' | 'ig' | 'gt' | 'tt' | 'x';
+type Tab = 'radar' | 'lead' | 'ig' | 'gt' | 'tt' | 'x';
 
 // ---------- helpers ----------
 const fmt = (n: number | null | undefined) => n == null ? '–' : n.toLocaleString('en-US');
@@ -97,6 +97,13 @@ export function FypLeak() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('radar');
   const [windowH, setWindowH] = useState(24);
+  const [history, setHistory] = useState<Signal[] | null>(null);
+  // Full signal history (last 45 days) — only needed for the “Siapa duluan” timeline, loaded on first open.
+  useEffect(() => {
+    if (tab !== 'lead' || history) return;
+    const since = new Date(Date.now() - 45 * 864e5).toISOString();
+    fetchAll<Signal>('fyp_signals', 'id,run_id,captured_at,source,feed,rank,title,related_terms,started_text,samples,is_organic', q => q.gte('captured_at', since)).then(setHistory).catch(e => setError(e.message));
+  }, [tab, history]);
 
   useEffect(() => {
     supabase.from('fyp_runs').select('*').order('started_at', { ascending: false }).limit(1000).then(({ data, error }) => {
@@ -145,6 +152,7 @@ export function FypLeak() {
   const kolScore = useMemo(() => kol ? scorePosts(kol, 'KOL', from, to) : null, [kol, from, to]);
   const igFeed = useMemo(() => [...(hmScore?.feed ?? []), ...(kolScore?.feed ?? [])].sort((a, b) => b.lift - a.lift), [hmScore, kolScore]);
   const sig = signals ?? [];
+  const allPosts = useMemo(() => hm && kol ? [...hm, ...kol] : null, [hm, kol]);
   const by = (source: Signal['source'], feed?: Signal['feed']) => sig.filter(s => s.source === source && (!feed || s.feed === feed));
 
   // Cross-source radar: a topic gets stronger the more independent sources mention it.
@@ -181,7 +189,7 @@ export function FypLeak() {
   if (error) return <section className="state-panel" role="alert"><h3>We couldn't load The FYP Leak</h3><p>{error}</p></section>;
   if (runs === null) return <div className="state-panel"><Loader2 size={18} className="auth-spin" /><p>Getting the latest signals…</p></div>;
 
-  const tabs: [Tab, string, React.ReactNode][] = [['radar', 'Leak Radar', <Radar size={14} />], ['ig', 'Homeless & KOL', <Users size={14} />], ['gt', 'Google Trends', <Search size={14} />], ['tt', 'TikTok', <Music2 size={14} />], ['x', 'X', <AtSign size={14} />]];
+  const tabs: [Tab, string, React.ReactNode][] = [['radar', 'Leak Radar', <Radar size={14} />], ['lead', 'Siapa duluan', <Clock size={14} />], ['ig', 'Homeless & KOL', <Users size={14} />], ['gt', 'Google Trends', <Search size={14} />], ['tt', 'TikTok', <Music2 size={14} />], ['x', 'X', <AtSign size={14} />]];
   const breakouts = igFeed.filter(p => p.breakout).length;
   const organicX = by('x').filter(s => s.is_organic).length;
   const merged = pick === 'all' && picked.length > 1;
@@ -217,6 +225,7 @@ export function FypLeak() {
     {inRange.length === 0 && tab !== 'ig' ? <section className="state-panel"><span className="state-icon"><Flame size={20} /></span><h3>No snapshots {runs.length ? 'in this period' : 'yet'}</h3><p>{runs.length ? 'Pick another date — days with data have an orange dot in the calendar.' : 'Run the “Metric Update The FYP Leak” skill to collect Google Trends, TikTok and X signals.'}</p></section>
       : signals === null && tab !== 'ig' ? <div className="state-panel"><Loader2 size={18} className="auth-spin" /><p>Loading snapshot…</p></div>
       : tab === 'radar' ? <RadarView run={latestRun} merged={merged} radar={radar} signals={sig} />
+      : tab === 'lead' ? <LeadView radar={radar} history={history} posts={allPosts} anchor={latestRun ? Date.parse(latestRun.started_at) : Date.now()} />
       : tab === 'ig' ? <IgView feed={igFeed} hm={hmScore?.latestCapture ?? null} kol={kolScore?.latestCapture ?? null} />
       : tab === 'gt' ? <GoogleView items={by('google_trends')} />
       : tab === 'tt' ? <TikTokView items={by('tiktok')} />
@@ -387,4 +396,138 @@ function XView({ items }: { items: Signal[] }) {
       {s.samples.length > 0 && <ul className="fyp-samples">{s.samples.map((t, i) => <li key={i}><a href={t.url} target="_blank" rel="noreferrer">{t.user}: {(t.text ?? '').slice(0, 140)}<ExternalLink size={11} /></a><span>{t.metrics}</span></li>)}</ul>}
     </li>)}</ul>
   </section>;
+}
+
+// ---------- Siapa duluan (first-mover timeline) ----------
+type Platform = 'x' | 'hm' | 'google' | 'tiktok';
+const PLATS: { key: Platform; label: string; color: string; how: string }[] = [
+  { key: 'x', label: 'X', color: '#e4e4e7', how: 'first snapshot that captured the trend' },
+  { key: 'hm', label: 'HM/KOL (IG)', color: '#ff743d', how: 'publish time of the first matching post' },
+  { key: 'google', label: 'Google Trends', color: '#2395ff', how: 'trend start (snapshot time minus “started … ago”)' },
+  { key: 'tiktok', label: 'TikTok', color: '#fd6a94', how: 'upload time of the oldest related video' },
+];
+const PLAT_OF = (s: Signal): Platform => s.source === 'google_trends' ? 'google' : s.source === 'tiktok' ? 'tiktok' : 'x';
+
+/** "3 hours ago", "40 minutes ago", "1d ago", "14h ago", "1w ago", "yesterday", "10/25" → absolute ms (relative to ref). */
+function agoTime(txt: string | null | undefined, ref: number): number | null {
+  if (!txt) return null;
+  const t = txt.toLowerCase().trim();
+  const n = (re: RegExp) => { const m = t.match(re); return m ? +m[1] : null; };
+  let v: number | null;
+  if ((v = n(/(\d+)\s*(?:minutes?|mins?|m)\b/)) != null) return ref - v * 6e4;
+  if ((v = n(/(\d+)\s*(?:hours?|hrs?|h)\b/)) != null) return ref - v * 36e5;
+  if ((v = n(/(\d+)\s*(?:days?|d)\b/)) != null) return ref - v * 864e5;
+  if ((v = n(/(\d+)\s*(?:weeks?|w)\b/)) != null) return ref - v * 7 * 864e5;
+  if (t.startsWith('yesterday')) return ref - 864e5;
+  const md = t.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (md) { const y = new Date(ref).getUTCFullYear(); let d = Date.UTC(y, +md[1] - 1, +md[2], 5); if (d > ref) d = Date.UTC(y - 1, +md[1] - 1, +md[2], 5); return d; }
+  return null;
+}
+const fmtLag = (h: number) => h < 1 ? `${Math.round(h * 60)} mnt` : h < 48 ? `${h.toFixed(h < 10 ? 1 : 0)} jam` : `${(h / 24).toFixed(1)} hari`;
+
+type Lead = { title: string; times: Partial<Record<Platform, number>>; first: Platform; span: number; igCount: number };
+
+function computeLeads(radar: RadarItem[], history: Signal[], igPosts: Post[], anchor: number): Lead[] {
+  const from = anchor - 7 * 864e5;
+  const hist = history.filter(h => h.source !== 'x' || h.is_organic !== false);
+  const ig = igPosts.filter(p => { const t = Date.parse(p.published_at); return t >= from && t <= anchor && p.post_category !== 'Sponsored Post'; })
+    .map(p => ({ p, t: tokens(p.caption ?? '') }));
+  const dfIg = new Map<string, number>(); ig.forEach(x => x.t.forEach(w => dfIg.set(w, (dfIg.get(w) ?? 0) + 1)));
+  const histTok = hist.map(h => ({ h, t: signalTokens(h) }));
+  const dfH = new Map<string, number>(); histTok.forEach(x => x.t.forEach(w => dfH.set(w, (dfH.get(w) ?? 0) + 1)));
+  return radar.slice(0, 10).map(item => {
+    const members = [item.s, ...[...item.hits.values()].flat()];
+    const sets = members.map(signalTokens);
+    // key tokens = words shared by at least two members of the cross-source cluster
+    const cnt = new Map<string, number>(); sets.forEach(s => s.forEach(w => cnt.set(w, (cnt.get(w) ?? 0) + 1)));
+    let keys = [...cnt.entries()].filter(([, c]) => c >= 2).map(([w]) => w);
+    if (!keys.length) keys = [...sets[0]];
+    const titles = new Set(members.map(m => m.title.toLowerCase().trim()));
+    const hit = (t: Set<string>, df: Map<string, number>, maxDf: number) => {
+      const shared = keys.filter(w => t.has(w));
+      return shared.length >= 2 || shared.some(w => w.length >= 5 && (df.get(w) ?? 0) <= maxDf);
+    };
+    const times: Partial<Record<Platform, number>> = {};
+    const put = (p: Platform, t: number | null) => { if (t == null || !Number.isFinite(t) || t < from || t > anchor + 36e5) return; if (times[p] == null || t < times[p]!) times[p] = t; };
+    histTok.forEach(({ h, t }) => {
+      if (Date.parse(h.captured_at) > anchor + 36e5) return;
+      if (!titles.has(h.title.toLowerCase().trim()) && !hit(t, dfH, 15)) return;
+      const cap = Date.parse(h.captured_at);
+      const p = PLAT_OF(h);
+      if (p === 'google') put(p, agoTime(h.started_text, cap) ?? cap);
+      else if (p === 'tiktok') { const vids = (h.samples ?? []).map(v => agoTime(v.ago, cap)).filter((x): x is number => x != null); put(p, vids.length ? Math.min(...vids) : cap); }
+      else put(p, cap);
+    });
+    const igHits = ig.filter(x => hit(x.t, dfIg, 40));
+    igHits.forEach(x => put('hm', Date.parse(x.p.published_at)));
+    const entries = (Object.entries(times) as [Platform, number][]).sort((a, b) => a[1] - b[1]);
+    return { title: item.s.title, times, first: entries[0]?.[0], span: entries.length ? (entries[entries.length - 1][1] - entries[0][1]) / 36e5 : 0, igCount: igHits.length };
+  }).filter(l => Object.keys(l.times).length >= 2) as Lead[];
+}
+
+function leadOption(leads: Lead[]): EChartsCoreOption {
+  const cats = leads.map(l => short(l.title, 34));
+  const rangeData = leads.map((l, i) => { const v = Object.values(l.times) as number[]; return [i, Math.min(...v), Math.max(...v)]; });
+  return {
+    animationDuration: 500, textStyle: { fontFamily: theme.sans },
+    grid: { left: 8, right: 24, top: 36, bottom: 28, containLabel: true },
+    legend: { top: 0, left: 0, icon: 'circle', itemWidth: 9, itemHeight: 9, textStyle: { color: theme.muted, fontSize: 11 }, data: PLATS.map(p => p.label) },
+    tooltip: { trigger: 'item', backgroundColor: theme.card, borderColor: theme.borderStrong, textStyle: { color: theme.text, fontSize: 12 },
+      formatter: (p: { seriesName: string; value: [number, number]; dataIndex: number }) => {
+        if (p.seriesName === 'range') return '';
+        const l = leads[p.value[1]]; const t0 = Math.min(...(Object.values(l.times) as number[]));
+        const lag = (p.value[0] - t0) / 36e5;
+        return `<b>${l.title}</b><br/>${p.seriesName}: ${wib(new Date(p.value[0]).toISOString())} WIB<br/>${lag < 0.05 ? '<b style="color:#4bde81">Pertama</b>' : `+${fmtLag(lag)} setelah yang pertama`}`;
+      } },
+    xAxis: { type: 'time', axisLine: { lineStyle: { color: theme.border } }, splitLine: { lineStyle: { color: theme.border, type: 'dashed' } },
+      axisLabel: { color: theme.subtle, fontSize: 11, formatter: (v: number) => new Date(v + 7 * 36e5).toISOString().slice(5, 16).replace('T', ' ').replace(/^(\d\d)-(\d\d)/, '$2/$1') } },
+    yAxis: { type: 'category', data: cats, inverse: true, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: theme.muted, fontSize: 11 } },
+    series: [
+      { name: 'range', type: 'custom', silent: true, data: rangeData, encode: { x: [1, 2], y: 0 },
+        renderItem: (_p: unknown, api: { value: (i: number) => number; coord: (v: number[]) => number[] }) => {
+          const s = api.coord([api.value(1), api.value(0)]); const e = api.coord([api.value(2), api.value(0)]);
+          return { type: 'line', shape: { x1: s[0], y1: s[1], x2: e[0], y2: e[1] }, style: { stroke: '#3f3f46', lineWidth: 2 } };
+        } },
+      ...PLATS.map(p => ({ name: p.label, type: 'scatter', symbolSize: 12, itemStyle: { color: p.color, borderColor: theme.card, borderWidth: 2 },
+        data: leads.map((l, i) => l.times[p.key] != null ? [l.times[p.key], i] : null).filter(Boolean) })),
+    ],
+  };
+}
+
+function LeadView({ radar, history, posts, anchor }: { radar: RadarItem[]; history: Signal[] | null; posts: Post[] | null; anchor: number }) {
+  const leads = useMemo(() => history && posts ? computeLeads(radar, history, posts, anchor) : null, [radar, history, posts, anchor]);
+  const opt = useMemo(() => leads?.length ? leadOption(leads) : null, [leads]);
+  const stats = useMemo(() => PLATS.map(p => {
+    const ls = (leads ?? []).filter(l => l.times[p.key] != null);
+    const lags = ls.map(l => (l.times[p.key]! - Math.min(...(Object.values(l.times) as number[]))) / 36e5);
+    return { ...p, present: ls.length, first: ls.filter(l => l.first === p.key).length, lag: median(lags) };
+  }), [leads]);
+  if (!leads) return <div className="state-panel"><Loader2 size={18} className="auth-spin" /><p>Building the timeline…</p></div>;
+  if (!leads.length) return <section className="state-panel"><span className="state-icon"><Clock size={20} /></span><h3>Not enough overlap yet</h3><p>A topic needs to appear on at least two platforms to compare who caught it first.</p></section>;
+  const winner = [...stats].sort((a, b) => b.first - a.first)[0];
+  return <div className="an-stack">
+    <section className="kpi-grid fyp-lead-kpis">
+      {stats.map(s => <article key={s.key} className={`lead-card ${s.key === winner.key && s.first ? 'win' : ''}`}>
+        <span className="lead-dot" style={{ background: s.color }} />
+        <div><p className="lead-name">{s.label}</p>
+          <p className="lead-main"><b>{s.first}×</b> pertama <span>dari {s.present} topik</span></p>
+          <p className="lead-sub">{s.present ? (s.lag < 0.05 ? 'Median: paling awal' : `Median telat ${fmtLag(s.lag)}`) : 'Belum menangkap topik ini'}</p></div>
+      </article>)}
+    </section>
+    <section className="panel">
+      <Heading title="Siapa duluan · timeline per topik" action={<span className="muted-action">Titik = kapan platform pertama kali memunculkan topik · garis = jeda dari yang pertama sampai yang terakhir</span>} />
+      <EChart option={opt!} height={Math.max(220, leads.length * 42 + 80)} ariaLabel="Timeline of which platform surfaced each topic first" />
+      <ul className="lead-notes">{PLATS.map(p => <li key={p.key}><span className="lead-dot" style={{ background: p.color }} />{p.label}: {p.how}</li>)}</ul>
+      <p className="fyp-note">X dihitung dari snapshot pertama yang menangkapnya, jadi X bisa tampak lebih telat dari aslinya. Makin sering skill dijalankan, makin presisi timeline ini. Topik dicocokkan lewat kata kunci, 7 hari ke belakang dari snapshot.</p>
+    </section>
+    <section className="panel">
+      <Heading title="Urutan per topik" />
+      <ul className="fyp-list">{leads.map(l => {
+        const order = (Object.entries(l.times) as [Platform, number][]).sort((a, b) => a[1] - b[1]); const t0 = order[0][1];
+        return <li key={l.title} className="fyp-item"><div className="fyp-item-head"><strong>{l.title}</strong><span className="kw-tag">jeda total {fmtLag(l.span)}</span></div>
+          <div className="lead-chain">{order.map(([p, t], i) => { const meta = PLATS.find(x => x.key === p)!; return <span key={p} className="lead-step">{i > 0 && <span className="lead-arrow">→</span>}<span className="lead-dot" style={{ background: meta.color }} />{meta.label}<em>{i === 0 ? wib(new Date(t).toISOString()) : `+${fmtLag((t - t0) / 36e5)}`}</em>{p === 'hm' && <small>{l.igCount} post</small>}</span>; })}</div>
+        </li>;
+      })}</ul>
+    </section>
+  </div>;
 }
