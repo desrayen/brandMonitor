@@ -1,11 +1,11 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 import * as echarts from 'echarts/core';
-import { BarChart, LineChart, PieChart, ScatterChart, GraphChart, RadarChart } from 'echarts/charts';
+import { BarChart, LineChart, PieChart, ScatterChart, GraphChart, RadarChart, CustomChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent, MarkAreaComponent, MarkLineComponent, LegendComponent, RadarComponent } from 'echarts/components';
 import { SVGRenderer, CanvasRenderer } from 'echarts/renderers';
 import type { EChartsCoreOption } from 'echarts/core';
 
-echarts.use([BarChart, LineChart, PieChart, ScatterChart, GraphChart, RadarChart, RadarComponent, GridComponent, TooltipComponent, MarkAreaComponent, MarkLineComponent, LegendComponent, SVGRenderer, CanvasRenderer]);
+echarts.use([BarChart, LineChart, PieChart, ScatterChart, GraphChart, RadarChart, CustomChart, RadarComponent, GridComponent, TooltipComponent, MarkAreaComponent, MarkLineComponent, LegendComponent, SVGRenderer, CanvasRenderer]);
 
 /** Thin React wrapper around Apache ECharts (tree-shaken, SVG renderer). */
 export function EChart({ option, height = 200, width = '100%', className, style, ariaLabel, renderer = 'svg', onEvents, onReady }: {
