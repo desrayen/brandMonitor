@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Flame, Search, Music2, AtSign, Users, Star, ExternalLink, Loader2, Radar, ChevronDown, ChevronRight, Zap, Clock, Hash, LayoutGrid } from 'lucide-react';
@@ -600,24 +600,33 @@ function packCircles(rs: number[]): { x: number; y: number }[] {
   return out;
 }
 
-function bubbleOption(items: Kw[]): EChartsCoreOption {
+function bubbleOption(items: Kw[], boxW: number, boxH: number): EChartsCoreOption {
   const max = Math.max(1, ...items.map(k => k.count));
-  const radius = items.map(k => 22 + 58 * Math.sqrt(k.count / max));
-  const pos = packCircles(radius);
+  const r0 = items.map(k => 20 + 62 * Math.sqrt(k.count / max));
+  const pos = packCircles(r0);
+  const minX = Math.min(...pos.map((p, i) => p.x - r0[i])), maxX = Math.max(...pos.map((p, i) => p.x + r0[i]));
+  const minY = Math.min(...pos.map((p, i) => p.y - r0[i])), maxY = Math.max(...pos.map((p, i) => p.y + r0[i]));
+  // one uniform scale so circles stay round and the cluster fits the box
+  const k = Math.min(1.25, (boxW - 16) / (maxX - minX), (boxH - 16) / (maxY - minY));
+  const ox = (boxW - (maxX - minX) * k) / 2 - minX * k, oy = (boxH - (maxY - minY) * k) / 2 - minY * k;
   return {
-    animationDuration: 600, textStyle: { fontFamily: 'Georgia, \'Times New Roman\', serif' },
+    animationDuration: 500,
     tooltip: { backgroundColor: theme.card, borderColor: theme.borderStrong, textStyle: { color: theme.text, fontSize: 12, fontFamily: theme.sans },
-      formatter: (p: { data: { kw: Kw } }) => { const k = p.data.kw; return `<b>${k.key}</b> · ${k.n} kata<br/>${k.count} mentions<br/>${KW_SRC.filter(s => k.srcs[s.key]).map(s => `${s.label}: ${k.srcs[s.key]}`).join(' · ')}`; } },
+      formatter: (p: { data: { kw: Kw } }) => { const w = p.data.kw; return `<b>${w.key}</b> · ${w.n} kata<br/>${w.count} mentions<br/>${KW_SRC.filter(s => w.srcs[s.key]).map(s => `${s.label}: ${w.srcs[s.key]}`).join(' · ')}`; } },
+    xAxis: { type: 'value', min: 0, max: boxW, show: false }, yAxis: { type: 'value', min: 0, max: boxH, show: false, inverse: true },
+    grid: { left: 0, right: 0, top: 0, bottom: 0 },
     series: [{
-      type: 'graph', layout: 'none', roam: false, left: 'center', top: 'middle', width: '96%', height: '94%',
-      data: items.map((k, i) => {
-        const r = radius[i];
-        const longest = Math.max(...k.key.split(' ').map(w => w.length));
-        const font = Math.max(8, Math.min(r * 0.62, (r * 1.75) / Math.max(3, longest * 0.58)));
-        return { name: `${k.n}|${k.key}`, kw: k, value: k.count, x: pos[i].x, y: pos[i].y, symbolSize: r * 2,
-          itemStyle: { color: KW_N_COLOR[k.n], opacity: 0.92 },
-          label: { show: true, formatter: `{a|${k.key.replace(/ /g, '\n')}}\n{b|${k.count}${i < 3 ? ' mentions' : ''}}`,
-            rich: { a: { fontSize: font, lineHeight: font * 1.05, color: '#18181b', fontFamily: 'Georgia, serif', align: 'center' }, b: { fontSize: Math.max(8, font * 0.5), lineHeight: font * 0.8, color: '#52525b', fontFamily: theme.sans, align: 'center' } } } };
+      type: 'scatter',
+      data: items.map((w, i) => {
+        const r = r0[i] * k;
+        const words = w.key.split(' ');
+        const longest = Math.max(...words.map(x => x.length));
+        const font = Math.max(7, Math.min(r * 0.5, (r * 1.6) / Math.max(3, longest * 0.56), (r * 1.45) / (words.length + 0.6)));
+        return { value: [pos[i].x * k + ox, pos[i].y * k + oy], kw: w, symbolSize: r * 2,
+          itemStyle: { color: KW_N_COLOR[w.n], opacity: 0.93 },
+          label: { show: true, position: 'inside', formatter: `{a|${words.join('\n')}}\n{b|${w.count}${i < 3 ? ' mentions' : ''}}`,
+            rich: { a: { fontSize: font, lineHeight: font * 1.08, color: '#18181b', fontFamily: 'Georgia, \'Times New Roman\', serif', align: 'center' },
+              b: { fontSize: Math.max(7, font * 0.48), lineHeight: Math.max(9, font * 0.75), color: '#52525b', fontFamily: theme.sans, align: 'center' } } } };
       }),
       emphasis: { scale: 1.04, itemStyle: { opacity: 1 } },
     }],
@@ -640,7 +649,11 @@ function KeywordView({ signals, posts }: { signals: Signal[]; posts: FeedPost[] 
   }, [signals, posts]);
   const all = useMemo(() => countKeywords(docs.filter(d => srcOn[d.src])), [docs, srcOn]);
   const list = useMemo(() => all.filter(k => (!n || k.n === n) && (!q || k.key.includes(q.toLowerCase()))), [all, n, q]);
-  const bubbles = useMemo(() => bubbleOption(list.slice(0, 40)), [list]);
+  const [boxW, setBoxW] = useState(900);
+  const boxRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { const el = boxRef.current; if (!el) return; const ro = new ResizeObserver(() => setBoxW(Math.round(el.clientWidth))); ro.observe(el); return () => ro.disconnect(); }, [list.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+  const boxH = boxW < 600 ? 420 : 540;
+  const bubbles = useMemo(() => bubbleOption(list.slice(0, 40), boxW, boxH), [list, boxW, boxH]);
   const maxCount = list[0]?.count ?? 1;
   const nDocs = docs.filter(d => srcOn[d.src]).length;
   return <div className="an-stack">
@@ -655,7 +668,7 @@ function KeywordView({ signals, posts }: { signals: Signal[]; posts: FeedPost[] 
     {list.length === 0 ? <section className="state-panel"><span className="state-icon"><Search size={20} /></span><h3>Belum ada keyword</h3><p>Coba aktifkan sumber lain atau pilih periode yang punya snapshot.</p></section> : <>
       <section className="panel">
         <Heading title="Keyword bubble" action={<span className="muted-action">Ukuran = jumlah mentions · warna = 1 / 2 / 3 kata · top 40</span>} />
-        <EChart option={bubbles} height={560} renderer="canvas" ariaLabel="Bubble chart of the most mentioned keywords" />
+        <div ref={boxRef}><EChart option={bubbles} height={boxH} ariaLabel="Bubble chart of the most mentioned keywords" /></div>
       </section>
       <section className="panel">
         <Heading title="Ranking keyword" action={<span className="muted-action">Top {Math.min(limit, list.length)} dari {fmt(list.length)}</span>} />
