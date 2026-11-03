@@ -574,3 +574,7 @@ td:first-child { color: #fafafa; font-family: Inter, sans-serif; font-size: 13px
 .fyp-video footer { display: flex; flex-wrap: wrap; gap: 8px; color: #d4d4d8; font-variant-numeric: tabular-nums; }
 .fyp-video small { color: #71717a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 760px) { .fyp-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .fyp-videos { grid-template-columns: 1fr; } }
+
+.fyp-charts { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; }
+.kw-tag.seen { background: rgba(75,222,129,.12); color: #8eeab0; }
+@media (max-width: 900px) { .fyp-charts { grid-template-columns: 1fr; } }
