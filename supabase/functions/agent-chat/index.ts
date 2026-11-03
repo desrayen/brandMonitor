@@ -91,7 +91,10 @@ Deno.serve(async req => {
     global: { headers: { Authorization: authHeader } },
   });
   const { data: { user } } = await supabase.auth.getUser(authHeader.replace(/^Bearer\s+/i, ''));
-  if (!user) return new Response(JSON.stringify({ error: 'Not signed in' }), { status: 401, headers: { ...cors, 'content-type': 'application/json' } });
+  if (!user || user.is_anonymous) return new Response(JSON.stringify({ error: 'Not signed in' }), { status: 401, headers: { ...cors, 'content-type': 'application/json' } });
+  // only team members (a row in user_roles) may use the agent — not guests with a view key or self-registered accounts
+  const { data: role } = await supabase.from('user_roles').select('role').eq('user_id', user.id).maybeSingle();
+  if (!role) return new Response(JSON.stringify({ error: 'Not allowed' }), { status: 403, headers: { ...cors, 'content-type': 'application/json' } });
 
   if (!Deno.env.get('ANTHROPIC_API_KEY')) {
     return new Response(JSON.stringify({ error: 'ANTHROPIC_API_KEY secret is not set in Supabase.' }), { status: 500, headers: { ...cors, 'content-type': 'application/json' } });
