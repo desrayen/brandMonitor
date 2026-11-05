@@ -1,0 +1,18 @@
+/* ---------- Brand Safety report (screen + print) ---------- */
+.bs-report-wrap { margin-top: 12px; border: 1px solid #3f3f46; border-radius: 12px; overflow: hidden; }
+.bs-report-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; background: #18181b; font-size: 12.5px; color: #a1a1aa; }
+.bs-report { background: #fff; color: #111; padding: 32px 36px; font: 13px/1.5 Inter, system-ui, sans-serif; }
+.bs-report .eyebrow { margin: 0; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #ff743d; font-weight: 600; }
+.bs-report h1 { margin: 4px 0 6px; font-size: 22px; font-weight: 600; } .bs-report h2 { margin: 28px 0 6px; padding-top: 16px; border-top: 1px solid #e5e5e5; font-size: 16px; font-weight: 600; }
+.bs-report h3 { margin: 14px 0 6px; font-size: 13px; font-weight: 600; color: #333; } .bs-report p { margin: 0 0 6px; } .bs-report .small { font-size: 11.5px; color: #666; }
+.bs-report table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 12px; white-space: normal; }
+.bs-report th, .bs-report td { padding: 6px 8px; border-bottom: 1px solid #e5e5e5; text-align: left; vertical-align: top; color: #111; } .bs-report th { background: #f5f5f5; font-weight: 600; }
+.bs-report a { color: #1d4ed8; word-break: break-all; } .bs-report ul { margin: 0 0 6px; padding-left: 18px; }
+.bs-report .v { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 500; vertical-align: middle; }
+.bs-report .v-clear { background: #dcfce7; color: #166534; } .bs-report .v-caution { background: #ffedd5; color: #9a3412; } .bs-report .v-flag { background: #fee2e2; color: #991b1b; } .bs-report .v-none { background: #eee; color: #555; }
+.bs-report footer { margin-top: 28px; padding-top: 10px; border-top: 1px solid #e5e5e5; }
+@media print {
+  body * { visibility: hidden; } .bs-report, .bs-report * { visibility: visible; }
+  .bs-report { position: absolute; inset: 0; padding: 0; } .bs-report-bar { display: none; }
+  .bs-report h2 { break-after: avoid; } .bs-report .acct { break-inside: avoid-page; }
+}
