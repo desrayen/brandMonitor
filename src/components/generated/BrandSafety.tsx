@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Check, ExternalLink, FileText, Loader2, Plus, Printer, RotateCw, ShieldAlert, ShieldCheck, Trash2, UserRound, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useIsSuperAdmin } from './ThreadsMonitor';
+import { BrandSafetyAffiliations } from './BrandSafetyAffiliations';
 import './brand-safety.css';
 
 // Brand Safety · background check of monitored accounts for a brand client.
@@ -46,11 +47,17 @@ export function scoreOf(rows: Evidence[], cats: Record<string, Category>) {
 }
 
 export function BrandSafety() {
+  const [view, setView] = useState<'affiliations' | 'cases'>('affiliations');
   const [caseId, setCaseId] = useState<string | null>(null);
   const [cats, setCats] = useState<Record<string, Category>>({});
   useEffect(() => { supabase.from('bs_categories').select('*').order('sort').then(({ data }) => setCats(Object.fromEntries(((data ?? []) as Category[]).map(c => [c.key, c])))); }, []);
   return <section className="threads-monitor">
-    {caseId ? <CaseDetail id={caseId} cats={cats} onBack={() => setCaseId(null)} /> : <CaseList onOpen={setCaseId} />}
+    <nav className="tab-nav mb-2" aria-label="Brand Safety">
+      <button className={view === 'affiliations' ? 'tab-pill active' : 'tab-pill'} onClick={() => setView('affiliations')}><ShieldAlert size={14} /><span>Afiliasi per akun</span></button>
+      <button className={view === 'cases' ? 'tab-pill active' : 'tab-pill'} onClick={() => setView('cases')}><FileText size={14} /><span>Case klien</span></button>
+    </nav>
+    {view === 'affiliations' ? <BrandSafetyAffiliations canEdit />
+      : caseId ? <CaseDetail id={caseId} cats={cats} onBack={() => setCaseId(null)} /> : <CaseList onOpen={setCaseId} />}
   </section>;
 }
 

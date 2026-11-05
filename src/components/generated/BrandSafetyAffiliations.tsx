@@ -1,0 +1,119 @@
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight, ExternalLink, Loader2, Pencil, Search, X } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+
+// Brand Safety · "Afiliasi" tab: one row per monitored account with the probable
+// government affiliation (name), its strength (low / medium / high), a sourced
+// explanation and at least five credible links where the trail can be read.
+
+export type AffStatus = 'unknown' | 'none' | 'low' | 'medium' | 'high';
+type Link = { url: string; title?: string; source?: string; date?: string };
+type Row = { handle: string; followers: number | null; region: string | null; entity: string | null; group_name: string | null; affiliated_name: string | null; status: AffStatus; detail: string | null; links: Link[]; researched_at: string | null; updated_at: string | null };
+
+export const AFF_STATUS: Record<AffStatus, { label: string; cls: string; help: string }> = {
+  high: { label: 'High', cls: 'bad', help: 'Sangat jelas — termasuk investasi langsung maupun tidak langsung, atau jabatan/kepemilikan tercatat.' },
+  medium: { label: 'Medium', cls: 'warn', help: 'Afiliasi jelas dan bersumber (jabatan, kampanye resmi, kontrak/kerja sama), tanpa bukti investasi.' },
+  low: { label: 'Low', cls: 'run', help: 'Kemungkinan hubungan keluarga/jaringan/asosiasi; belum ada bukti langsung.' },
+  none: { label: 'Tidak ditemukan', cls: 'on', help: 'Sudah diriset, tidak ditemukan afiliasi maupun badan usaha yang terkait.' },
+  unknown: { label: 'Belum diriset', cls: 'off', help: 'Belum ada riset.' },
+};
+const fmt = (n: number | null | undefined) => (n ?? 0).toLocaleString('en-US');
+const day = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '–');
+const host = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
+
+export function BrandSafetyAffiliations({ canEdit }: { canEdit: boolean }) {
+  const [rows, setRows] = useState<Row[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const [status, setStatus] = useState<AffStatus | 'all' | 'found'>('all');
+  const [open, setOpen] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Row | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    setError(null);
+    const { data, error } = await supabase.rpc('bs_affiliation_overview');
+    if (error) setError(error.message); else setRows((data ?? []) as Row[]);
+  }, []);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 3500); return () => clearTimeout(t); }, [toast]);
+
+  const shown = useMemo(() => {
+    const ql = q.trim().toLowerCase().replace(/^@/, '');
+    return (rows ?? []).filter(r => (status === 'all' || (status === 'found' ? ['low', 'medium', 'high'].includes(r.status) : r.status === status))
+      && (!ql || r.handle.toLowerCase().includes(ql) || (r.affiliated_name ?? '').toLowerCase().includes(ql) || (r.group_name ?? '').toLowerCase().includes(ql) || (r.entity ?? '').toLowerCase().includes(ql)));
+  }, [rows, q, status]);
+  const counts = useMemo(() => { const c: Record<string, number> = {}; for (const r of rows ?? []) c[r.status] = (c[r.status] ?? 0) + 1; return c; }, [rows]);
+
+  if (error) return <p className="m-0 py-10 text-center text-[13px] text-red-400">{/bs_affiliation/.test(error) ? 'Tabel afiliasi belum ada. Jalankan migration 20261106010000_bs_affiliations.sql di Supabase.' : error}</p>;
+  if (!rows) return <div className="flex justify-center py-10"><Loader2 size={18} className="auth-spin" /></div>;
+  return <>
+    <div className="threads-filters">
+      <nav className="tab-nav" aria-label="Status">
+        <button className={status === 'all' ? 'tab-pill active' : 'tab-pill'} onClick={() => setStatus('all')}>Semua ({rows.length})</button>
+        <button className={status === 'found' ? 'tab-pill active' : 'tab-pill'} onClick={() => setStatus('found')}>Ada afiliasi ({(counts.low ?? 0) + (counts.medium ?? 0) + (counts.high ?? 0)})</button>
+        {(['high', 'medium', 'low', 'none', 'unknown'] as AffStatus[]).map(s => <button key={s} className={status === s ? 'tab-pill active' : 'tab-pill'} onClick={() => setStatus(s)} title={AFF_STATUS[s].help}>{AFF_STATUS[s].label} ({counts[s] ?? 0})</button>)}
+      </nav>
+      <div className="threads-search"><Search size={13} /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Cari akun, nama, grup…" /></div>
+    </div>
+    <p className="threads-meta"><span className="live-dot" />Low = kemungkinan hubungan keluarga/jaringan · Medium = afiliasi jelas & bersumber · High = sangat jelas, termasuk investasi langsung/tidak langsung. Setiap baris berisi minimal 5 tautan kredibel.{toast && <span className="!text-emerald-300"> · {toast}</span>}</p>
+    {editing && <div className="mt-3"><AffForm row={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setToast('Tersimpan'); load(); }} /></div>}
+    <section className="panel mt-3 !p-0 overflow-hidden">
+      <div className="table-scroll"><table>
+        <thead><tr><th /><th>Akun</th><th>Followers</th><th>Grup / badan usaha</th><th>Probable Affiliated with Gov</th><th>Probable Status</th><th>Detail</th><th>Referensi</th>{canEdit && <th />}</tr></thead>
+        <tbody>{shown.map(r => {
+          const isOpen = open === r.handle;
+          return <Fragment key={r.handle}>
+            <tr className="cursor-pointer" onClick={() => setOpen(isOpen ? null : r.handle)}>
+              <td className="!pr-0 text-zinc-500">{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</td>
+              <td><span className="account-avatar">{r.handle.slice(1, 2).toUpperCase()}</span><a href={`https://www.instagram.com/${r.handle.slice(1)}/`} target="_blank" rel="noreferrer" className="hover:underline" onClick={e => e.stopPropagation()}>{r.handle}</a></td>
+              <td>{fmt(r.followers)}</td>
+              <td className="!whitespace-normal max-w-[220px] text-[12px]">{r.group_name && <span className="block text-zinc-100">{r.group_name}</span>}<span className="text-zinc-500">{r.entity ?? (r.status === 'none' ? 'tidak ditemukan badan usaha' : '–')}</span></td>
+              <td className="!whitespace-normal max-w-[220px]">{r.affiliated_name ?? <span className="text-zinc-600">–</span>}</td>
+              <td><span className={`status-pill ${AFF_STATUS[r.status].cls}`}>{AFF_STATUS[r.status].label}</span></td>
+              <td className="!whitespace-normal max-w-[420px] text-[12px] text-zinc-400">{r.detail ? (isOpen ? r.detail : r.detail.slice(0, 140) + (r.detail.length > 140 ? '…' : '')) : '–'}</td>
+              <td>{r.links.length ? <span className={`status-pill ${r.links.length >= 5 ? 'off' : 'warn'}`}>{r.links.length} tautan</span> : '–'}</td>
+              {canEdit && <td onClick={e => e.stopPropagation()}><button className="icon-btn" onClick={() => setEditing(r)} aria-label="Ubah"><Pencil size={13} /></button></td>}
+            </tr>
+            {isOpen && <tr><td /><td colSpan={canEdit ? 8 : 7} className="!whitespace-normal bg-[#09090b]">
+              {r.links.length ? <ol className="m-0 py-1 pl-5 text-[12px] leading-relaxed">{r.links.map((l, i) => <li key={i}><a className="inline-flex items-center gap-1 text-zinc-200 hover:underline" href={l.url} target="_blank" rel="noreferrer">{l.title || l.url}<ExternalLink size={11} /></a><span className="text-zinc-500"> — {l.source || host(l.url)}{l.date ? ` · ${day(l.date)}` : ''}</span></li>)}</ol> : <p className="m-0 py-2 text-[12px] text-zinc-500">Belum ada referensi.</p>}
+              {r.researched_at && <p className="m-0 pb-2 text-[11px] text-zinc-600">Diriset {day(r.researched_at)}{r.updated_at ? ` · diperbarui ${day(r.updated_at)}` : ''}</p>}
+            </td></tr>}
+          </Fragment>;
+        })}</tbody>
+      </table></div>
+      {!shown.length && <p className="m-0 py-10 text-center text-[13px] text-zinc-500">Tidak ada akun yang cocok.</p>}
+    </section>
+  </>;
+}
+
+function AffForm({ row, onClose, onSaved }: { row: Row; onClose: () => void; onSaved: () => void }) {
+  const [d, setD] = useState({ entity: row.entity ?? '', group_name: row.group_name ?? '', affiliated_name: row.affiliated_name ?? '', status: (row.status === 'unknown' ? 'none' : row.status) as Exclude<AffStatus, 'unknown'>, detail: row.detail ?? '', links: row.links.map(l => [l.url, l.title, l.source, l.date].filter(Boolean).join(' | ')).join('\n') });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const set = (p: Partial<typeof d>) => setD({ ...d, ...p });
+  const parseLinks = (): Link[] => d.links.split('\n').map(s => s.trim()).filter(Boolean).map(line => { const [url, title, source, date] = line.split('|').map(x => x.trim()); return { url, title: title || undefined, source: source || undefined, date: date || undefined }; });
+  const save = async () => {
+    const links = parseLinks();
+    if (links.some(l => !/^https?:\/\//.test(l.url))) return setErr('Setiap baris referensi harus diawali URL (https://…).');
+    if (['low', 'medium', 'high'].includes(d.status) && links.length < 5) return setErr('Status Low/Medium/High butuh minimal 5 tautan kredibel.');
+    if (['low', 'medium', 'high'].includes(d.status) && !d.affiliated_name.trim()) return setErr('Isi nama orang/lembaga yang terafiliasi.');
+    setSaving(true); setErr(null);
+    const { error } = await supabase.from('bs_affiliations').upsert({ handle: row.handle, entity: d.entity.trim() || null, group_name: d.group_name.trim() || null, affiliated_name: d.affiliated_name.trim() || null, status: d.status, detail: d.detail.trim() || null, links, researched_at: new Date().toISOString().slice(0, 10) });
+    setSaving(false);
+    if (error) return setErr(error.message);
+    onSaved();
+  };
+  return <div className="topic-form">
+    <div className="flex items-center justify-between"><h3>Afiliasi {row.handle}</h3><button className="icon-btn" onClick={onClose} aria-label="Tutup"><X size={14} /></button></div>
+    <div className="grid gap-3 md:grid-cols-3">
+      <label>Grup<input value={d.group_name} onChange={e => set({ group_name: e.target.value })} placeholder="mis. FOLK Group" /></label>
+      <label>Badan usaha<input value={d.entity} onChange={e => set({ entity: e.target.value })} placeholder="mis. PT Multi Garam Utama Tbk (FOLK)" /></label>
+      <label>Probable Status<select value={d.status} onChange={e => set({ status: e.target.value as Exclude<AffStatus, 'unknown'> })}>{(['none', 'low', 'medium', 'high'] as const).map(s => <option key={s} value={s}>{AFF_STATUS[s].label} — {AFF_STATUS[s].help}</option>)}</select></label>
+    </div>
+    <label>Probable Affiliated with Gov (nama orang / lembaga)<input value={d.affiliated_name} onChange={e => set({ affiliated_name: e.target.value })} placeholder="mis. Rahayu Saraswati Djojohadikusumo (keponakan Presiden; Komut TRIN/TRUE)" /></label>
+    <label>Detail (fakta bersumber, bukan kesimpulan)<textarea rows={4} value={d.detail} onChange={e => set({ detail: e.target.value })} /></label>
+    <label>Referensi — satu per baris: URL | judul | sumber | tanggal (YYYY-MM-DD)<textarea rows={6} value={d.links} onChange={e => set({ links: e.target.value })} placeholder={'https://www.cnbcindonesia.com/... | FOLK Group rampungkan investasi ke Folkative | CNBC Indonesia | 2023-09-06'} spellCheck={false} /></label>
+    {err && <p className="m-0 text-[12px] text-red-400">{err}</p>}
+    <div className="flex gap-2"><button className="state-btn !mt-0" onClick={save} disabled={saving}>{saving && <Loader2 size={14} className="auth-spin" />}Simpan</button><button className="filter-chip" onClick={onClose}>Batal</button></div>
+  </div>;
+}
