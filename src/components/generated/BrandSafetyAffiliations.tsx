@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, ExternalLink, Loader2, Pencil, RefreshCw, Search, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, ExternalLink, FileSpreadsheet, Loader2, Pencil, RefreshCw, Search, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { BrandSafetyExport } from './BrandSafetyExport';
 
 // Brand Safety · "Afiliasi" tab: one row per monitored account with the probable
 // government affiliation (name), its strength (low / medium / high), a sourced
@@ -10,6 +11,7 @@ export type AffStatus = 'unknown' | 'none' | 'low' | 'medium' | 'high';
 type Link = { url: string; title?: string; source?: string; date?: string };
 export type ContentFlag = 'no_data' | 'none' | 'editorial' | 'paid';
 type Example = { shortcode: string; url: string; date: string; type: 'paid' | 'mention' | 'topic'; brand?: string | null; offer?: string | null; caption?: string; views?: number | null };
+export type AffRow = Row;
 type Row = { handle: string; followers: number | null; region: string | null; entity: string | null; group_name: string | null; affiliated_name: string | null; status: AffStatus; detail: string | null; links: Link[]; researched_at: string | null; updated_at: string | null;
   content_flag: ContentFlag; content_posts: number; content_paid_posts: number; content_topic_posts: number; content_window_from: string | null; content_window_to: string | null; content_reason: string | null; content_note: string | null; content_examples: Example[]; content_checked_at: string | null };
 
@@ -41,6 +43,7 @@ export function BrandSafetyAffiliations({ canEdit }: { canEdit: boolean }) {
   const [editing, setEditing] = useState<Row | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const load = useCallback(async () => {
     setError(null);
     const { data, error } = await supabase.rpc('bs_affiliation_overview');
@@ -84,9 +87,11 @@ export function BrandSafetyAffiliations({ canEdit }: { canEdit: boolean }) {
         <button className={cflag === 'flagged' ? 'tab-pill active' : 'tab-pill'} onClick={() => setCflag('flagged')}>Ada sinyal gov ({(ccounts.paid ?? 0) + (ccounts.editorial ?? 0)})</button>
         {(['paid', 'editorial', 'none', 'no_data'] as ContentFlag[]).map(s => <button key={s} className={cflag === s ? 'tab-pill active' : 'tab-pill'} onClick={() => setCflag(s)} title={CONTENT_FLAG[s].help}>{CONTENT_FLAG[s].label} ({ccounts[s] ?? 0})</button>)}
       </nav>
+      <button className="filter-chip" onClick={() => setExporting(v => !v)} title="Tempel daftar link Instagram, unduh 1 file Excel berisi data Brand Safety-nya"><FileSpreadsheet size={12} /> Import link &amp; Export Excel</button>
       {canEdit && <button className="filter-chip" onClick={refreshContent} disabled={refreshing} title="Hitung ulang sinyal konten 3 bulan terakhir dari ig_posts">{refreshing ? <Loader2 size={12} className="auth-spin" /> : <RefreshCw size={12} />} Cek ulang konten</button>}
     </div>
     <p className="threads-meta"><span className="live-dot" />Low = kemungkinan hubungan keluarga/jaringan · Medium = afiliasi jelas & bersumber · High = sangat jelas, termasuk investasi langsung/tidak langsung. Setiap baris berisi minimal 5 tautan kredibel. Kolom <b>Konten</b> memindai post 3 bulan terakhir{period ? ` (${period})` : ''}: sponsor instansi pemerintah/BUMN vs liputan editorial.{toast && <span className="!text-emerald-300"> · {toast}</span>}</p>
+    {exporting && <div className="mt-3"><BrandSafetyExport statusLabel={s => AFF_STATUS[s as AffStatus]?.label ?? s} flagLabel={s => CONTENT_FLAG[s as ContentFlag]?.label ?? s} onClose={() => setExporting(false)} onDone={msg => { setToast(msg); load(); }} /></div>}
     {editing && <div className="mt-3"><AffForm row={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setToast('Tersimpan'); load(); }} /></div>}
     <section className="panel mt-3 !p-0 overflow-hidden">
       <div className="table-scroll"><table>
