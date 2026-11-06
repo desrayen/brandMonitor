@@ -3,6 +3,7 @@ import { ArrowLeft, Check, ExternalLink, FileText, Loader2, Plus, Printer, Rotat
 import { supabase } from '@/lib/supabase';
 import { useIsSuperAdmin } from './ThreadsMonitor';
 import { BrandSafetyAffiliations } from './BrandSafetyAffiliations';
+import { BrandSafetyPersons } from './BrandSafetyPersons';
 import './brand-safety.css';
 
 // Brand Safety · background check of monitored accounts for a brand client.
@@ -47,16 +48,18 @@ export function scoreOf(rows: Evidence[], cats: Record<string, Category>) {
 }
 
 export function BrandSafety() {
-  const [view, setView] = useState<'affiliations' | 'cases'>('affiliations');
+  const [view, setView] = useState<'affiliations' | 'persons' | 'cases'>('affiliations');
   const [caseId, setCaseId] = useState<string | null>(null);
   const [cats, setCats] = useState<Record<string, Category>>({});
   useEffect(() => { supabase.from('bs_categories').select('*').order('sort').then(({ data }) => setCats(Object.fromEntries(((data ?? []) as Category[]).map(c => [c.key, c])))); }, []);
   return <section className="threads-monitor">
     <nav className="tab-nav mb-2" aria-label="Brand Safety">
       <button className={view === 'affiliations' ? 'tab-pill active' : 'tab-pill'} onClick={() => setView('affiliations')}><ShieldAlert size={14} /><span>Afiliasi per akun</span></button>
+      <button className={view === 'persons' ? 'tab-pill active' : 'tab-pill'} onClick={() => setView('persons')}><UserRound size={14} /><span>Tokoh (Person)</span></button>
       <button className={view === 'cases' ? 'tab-pill active' : 'tab-pill'} onClick={() => setView('cases')}><FileText size={14} /><span>Case klien</span></button>
     </nav>
     {view === 'affiliations' ? <BrandSafetyAffiliations canEdit />
+      : view === 'persons' ? <BrandSafetyPersons canEdit />
       : caseId ? <CaseDetail id={caseId} cats={cats} onBack={() => setCaseId(null)} /> : <CaseList onOpen={setCaseId} />}
   </section>;
 }
