@@ -4,6 +4,9 @@ import { supabase } from '@/lib/supabase';
 import { useIsSuperAdmin } from './ThreadsMonitor';
 import { AFF_STATUS, type AffStatus } from './BrandSafetyAffiliations';
 
+type Link = { url: string; title?: string; source?: string; date?: string };
+const host = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
+
 // Brand Safety · "Tokoh" tab: person entity database. One row per public figure with the media accounts
 // they are affiliated with (picked from the accounts already in the database), a summary + list of their
 // Instagram content for the last 3 months, online news about them and a free-form manual note.
@@ -14,6 +17,7 @@ type Media = { handle: string; role: Role; title: string | null; source_url: str
 type IgPost = { id: string; post_url: string; posted_at: string | null; caption: string | null; theme: string | null; views: number | null; note: string | null };
 type News = { id: string; title: string; outlet: string | null; url: string | null; published_at: string | null; tone: Tone | null; summary: string | null };
 type PersonRow = { id: string; full_name: string; position: string | null; entity: string | null; notes: string | null; ig_handle: string | null; x_handle: string | null; tiktok_handle: string | null; linkedin_url: string | null;
+  probable_status: AffStatus; probable_affiliated_with: string | null; status_detail: string | null; links: Link[]; researched_at: string | null;
   ig_summary: string | null; ig_checked_at: string | null; news_checked_at: string | null; updated_at: string | null; media: Media[]; ig_from: string; ig_posts: IgPost[]; news: News[] };
 
 const ROLE: Record<Role, string> = { founder: 'Founder', owner: 'Pemilik', management: 'Manajemen', commissioner: 'Komisaris', advisor: 'Penasihat', affiliated: 'Terafiliasi', other: 'Lainnya' };
@@ -35,7 +39,7 @@ export function BrandSafetyPersons({ canEdit }: { canEdit: boolean }) {
   const load = useCallback(async () => {
     setError(null);
     const { data, error } = await supabase.rpc('bs_person_overview', { p_days: 92 });
-    if (error) setError(error.message); else setRows(((data ?? []) as PersonRow[]).map(r => ({ ...r, media: r.media ?? [], ig_posts: r.ig_posts ?? [], news: r.news ?? [] })));
+    if (error) setError(error.message); else setRows(((data ?? []) as PersonRow[]).map(r => ({ ...r, links: r.links ?? [], probable_status: r.probable_status ?? 'unknown', media: r.media ?? [], ig_posts: r.ig_posts ?? [], news: r.news ?? [] })));
   }, []);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { supabase.from('accounts').select('handle').order('handle').then(({ data }) => setKnown(((data ?? []) as { handle: string }[]).map(r => r.handle))); }, []);
@@ -43,7 +47,7 @@ export function BrandSafetyPersons({ canEdit }: { canEdit: boolean }) {
 
   const shown = useMemo(() => {
     const ql = q.trim().toLowerCase().replace(/^@/, '');
-    return (rows ?? []).filter(r => !ql || [r.full_name, r.position, r.entity, r.notes, r.ig_summary, ...r.media.map(m => m.handle + ' ' + (m.title ?? '')), ...r.news.map(n => n.title)].some(s => (s ?? '').toLowerCase().includes(ql)));
+    return (rows ?? []).filter(r => !ql || [r.full_name, r.position, r.entity, r.notes, r.probable_affiliated_with, r.status_detail, r.ig_summary, ...r.media.map(m => m.handle + ' ' + (m.title ?? '')), ...r.news.map(n => n.title)].some(s => (s ?? '').toLowerCase().includes(ql)));
   }, [rows, q]);
 
   const remove = async (p: PersonRow) => {
@@ -63,7 +67,7 @@ export function BrandSafetyPersons({ canEdit }: { canEdit: boolean }) {
     {editing && <div className="mt-3"><PersonEditForm row={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={msg => { setEditing(null); setToast(msg); load(); }} /></div>}
     <section className="panel mt-3 !p-0 overflow-hidden">
       <div className="table-scroll"><table>
-        <thead><tr><th /><th>Nama tokoh</th><th>Afiliasi dengan media</th><th>Konten Instagram 3 bln terakhir</th><th>Berita media online</th><th>Note</th>{canEdit && <th />}</tr></thead>
+        <thead><tr><th /><th>Nama tokoh</th><th>Afiliasi dengan media</th><th>Probable Affiliated with Gov</th><th>Probable Status</th><th>Detail</th><th>Referensi</th><th>Konten Instagram 3 bln terakhir</th><th>Berita media online</th><th>Note</th>{canEdit && <th />}</tr></thead>
         <tbody>{shown.map(p => {
           const isOpen = open === p.id;
           const latest = p.news[0];
@@ -78,6 +82,10 @@ export function BrandSafetyPersons({ canEdit }: { canEdit: boolean }) {
               <td className="!whitespace-normal max-w-[300px]">
                 <div className="flex flex-wrap gap-1">{p.media.length ? p.media.map(m => <span key={m.handle + m.role} className={`status-pill ${AFF_STATUS[m.status]?.cls ?? 'off'}`} title={`${ROLE[m.role]}${m.title ? ' · ' + m.title : ''} · afiliasi akun: ${AFF_STATUS[m.status]?.label ?? m.status}`}>{m.handle} · {ROLE[m.role]}</span>) : <span className="text-zinc-600">–</span>}</div>
               </td>
+              <td className="!whitespace-normal max-w-[240px] text-[12px] text-zinc-300">{p.probable_affiliated_with ?? <span className="text-zinc-600">–</span>}</td>
+              <td><span className={`status-pill ${AFF_STATUS[p.probable_status]?.cls ?? 'off'}`} title={AFF_STATUS[p.probable_status]?.help}>{AFF_STATUS[p.probable_status]?.label ?? p.probable_status}</span></td>
+              <td className="!whitespace-normal max-w-[300px] text-[12px] text-zinc-400">{p.status_detail ? (isOpen ? p.status_detail : p.status_detail.slice(0, 140) + (p.status_detail.length > 140 ? '…' : '')) : '–'}</td>
+              <td>{p.links.length ? <span className={`status-pill ${p.links.length >= 5 ? 'off' : 'warn'}`}>{p.links.length} tautan</span> : '–'}</td>
               <td className="!whitespace-normal max-w-[300px] text-[12px] text-zinc-400">
                 {p.ig_summary ? (isOpen ? p.ig_summary : p.ig_summary.slice(0, 140) + (p.ig_summary.length > 140 ? '…' : '')) : <span className="text-zinc-600">belum dicek</span>}
                 <span className="block text-[11px] text-zinc-500">{p.ig_posts.length} post tercatat{p.ig_checked_at ? ` · dicek ${day(p.ig_checked_at)}` : ''}</span>
@@ -89,7 +97,7 @@ export function BrandSafetyPersons({ canEdit }: { canEdit: boolean }) {
               <td className="!whitespace-normal max-w-[300px] text-[12px] text-zinc-400">{p.notes ? (isOpen ? p.notes : p.notes.slice(0, 120) + (p.notes.length > 120 ? '…' : '')) : '–'}</td>
               {canEdit && <td onClick={e => e.stopPropagation()}><div className="topic-actions justify-end"><button className="icon-btn" onClick={() => setEditing(p)} aria-label="Ubah"><Pencil size={13} /></button>{isAdmin && <button className="icon-btn danger" onClick={() => remove(p)} aria-label="Hapus"><Trash2 size={13} /></button>}</div></td>}
             </tr>
-            {isOpen && <tr><td /><td colSpan={canEdit ? 6 : 5} className="!whitespace-normal bg-[#09090b]">
+            {isOpen && <tr><td /><td colSpan={canEdit ? 10 : 9} className="!whitespace-normal bg-[#09090b]">
               <PersonDetail p={p} known={known} canEdit={canEdit} onChanged={load} onToast={setToast} />
             </td></tr>}
           </Fragment>;
@@ -103,6 +111,10 @@ export function BrandSafetyPersons({ canEdit }: { canEdit: boolean }) {
 // ------------------------------------------------------------------ expanded detail: media, IG posts, news
 function PersonDetail({ p, known, canEdit, onChanged, onToast }: { p: PersonRow; known: string[]; canEdit: boolean; onChanged: () => void; onToast: (m: string) => void }) {
   return <div className="grid gap-5 py-3 lg:grid-cols-3">
+    <div className="lg:col-span-3">
+      <Heading>Referensi afiliasi ({p.links.length}){p.researched_at ? ` · diriset ${day(p.researched_at)}` : ''}</Heading>
+      {p.links.length ? <ol className="m-0 pl-5 text-[12px] leading-relaxed">{p.links.map((l, i) => <li key={i}><a className="inline-flex items-center gap-1 text-zinc-200 hover:underline" href={l.url} target="_blank" rel="noreferrer">{l.title || l.url}<ExternalLink size={11} /></a><span className="text-zinc-500"> — {l.source || host(l.url)}{l.date ? ` · ${day(l.date)}` : ''}</span></li>)}</ol> : <p className="m-0 text-[12px] text-zinc-500">Belum ada referensi.</p>}
+    </div>
     <MediaSection p={p} known={known} canEdit={canEdit} onChanged={onChanged} onToast={onToast} />
     <IgSection p={p} canEdit={canEdit} onChanged={onChanged} onToast={onToast} />
     <NewsSection p={p} canEdit={canEdit} onChanged={onChanged} onToast={onToast} />
@@ -225,6 +237,8 @@ function NewsSection({ p, canEdit, onChanged, onToast }: { p: PersonRow; canEdit
 function PersonEditForm({ row, onClose, onSaved }: { row: PersonRow | null; onClose: () => void; onSaved: (msg: string) => void }) {
   const [d, setD] = useState({
     full_name: row?.full_name ?? '', position: row?.position ?? '', entity: row?.entity ?? '', ig_handle: row?.ig_handle ?? '', x_handle: row?.x_handle ?? '', tiktok_handle: row?.tiktok_handle ?? '', linkedin_url: row?.linkedin_url ?? '',
+    probable_status: (row?.probable_status ?? 'unknown') as AffStatus, probable_affiliated_with: row?.probable_affiliated_with ?? '', status_detail: row?.status_detail ?? '',
+    links: (row?.links ?? []).map(l => [l.url, l.title, l.source, l.date].filter(Boolean).join(' | ')).join('\n'),
     ig_summary: row?.ig_summary ?? '', ig_checked_at: row?.ig_checked_at ?? '', news_checked_at: row?.news_checked_at ?? '', notes: row?.notes ?? '',
   });
   const [saving, setSaving] = useState(false);
@@ -232,9 +246,15 @@ function PersonEditForm({ row, onClose, onSaved }: { row: PersonRow | null; onCl
   const set = (p: Partial<typeof d>) => setD({ ...d, ...p });
   const save = async () => {
     if (!d.full_name.trim()) return setErr('Nama tokoh wajib diisi.');
+    const links: Link[] = d.links.split('\n').map(x => x.trim()).filter(Boolean).map(line => { const [url, title, source, date] = line.split('|').map(y => y.trim()); return { url, title: title || undefined, source: source || undefined, date: date || undefined }; });
+    if (links.some(l => !/^https?:\/\//.test(l.url))) return setErr('Setiap baris referensi harus diawali URL (https://…).');
+    if (['low', 'medium', 'high'].includes(d.probable_status) && links.length < 5) return setErr('Status Low/Medium/High butuh minimal 5 tautan kredibel.');
+    if (['low', 'medium', 'high'].includes(d.probable_status) && !d.probable_affiliated_with.trim()) return setErr('Isi "Probable Affiliated with Gov" untuk status Low/Medium/High.');
     setSaving(true); setErr(null);
     const nz = (s: string) => s.trim() || null;
     const rec = { full_name: d.full_name.trim(), position: nz(d.position), entity: nz(d.entity), ig_handle: d.ig_handle.trim() ? normHandle(d.ig_handle) : null, x_handle: nz(d.x_handle), tiktok_handle: nz(d.tiktok_handle), linkedin_url: nz(d.linkedin_url),
+      probable_status: d.probable_status, probable_affiliated_with: nz(d.probable_affiliated_with), status_detail: nz(d.status_detail), links,
+      researched_at: d.probable_status === 'unknown' ? (row?.researched_at ?? null) : new Date().toISOString().slice(0, 10),
       ig_summary: nz(d.ig_summary), ig_checked_at: d.ig_checked_at || null, news_checked_at: d.news_checked_at || null, notes: nz(d.notes), updated_at: new Date().toISOString() };
     const { error } = row ? await supabase.from('persons').update(rec).eq('id', row.id) : await supabase.from('persons').insert(rec);
     setSaving(false);
@@ -251,6 +271,12 @@ function PersonEditForm({ row, onClose, onSaved }: { row: PersonRow | null; onCl
       <label>X / Twitter<input value={d.x_handle} onChange={e => set({ x_handle: e.target.value })} placeholder="@…" /></label>
       <label>TikTok<input value={d.tiktok_handle} onChange={e => set({ tiktok_handle: e.target.value })} placeholder="@…" /></label>
     </div>
+    <div className="grid gap-3 md:grid-cols-3">
+      <label>Probable Affiliated with Gov<input value={d.probable_affiliated_with} onChange={e => set({ probable_affiliated_with: e.target.value })} placeholder="mis. Presiden Jokowi — Staf Khusus (2019–2024)" /></label>
+      <label>Probable Status<select value={d.probable_status} onChange={e => set({ probable_status: e.target.value as AffStatus })}>{(['unknown', 'none', 'low', 'medium', 'high'] as AffStatus[]).map(x => <option key={x} value={x}>{AFF_STATUS[x].label}</option>)}</select></label>
+    </div>
+    <label>Detail (alasan status)<textarea rows={3} value={d.status_detail} onChange={e => set({ status_detail: e.target.value })} placeholder="Fakta bersumber, hubungan, periode. Tandai dugaan sebagai belum terkonfirmasi." /></label>
+    <label>Referensi — satu per baris: URL | judul | sumber | tanggal (YYYY-MM-DD)<textarea rows={5} value={d.links} onChange={e => set({ links: e.target.value })} spellCheck={false} /></label>
     <label>LinkedIn URL<input value={d.linkedin_url} onChange={e => set({ linkedin_url: e.target.value })} placeholder="https://www.linkedin.com/in/…" /></label>
     <label>Ringkasan konten Instagram 3 bulan terakhir<textarea rows={3} value={d.ig_summary} onChange={e => set({ ig_summary: e.target.value })} placeholder="Tema utama, frekuensi, apakah ada konten pemerintahan/sponsor. Faktual, sertakan periode." /></label>
     <div className="grid gap-3 md:grid-cols-2">
