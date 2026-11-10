@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AtSign, Users, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, CornerDownRight, Crown, Download, ExternalLink, Heart, Loader2, MessageCircle, Network, Pencil, Play, Plus, Repeat2, Search, Settings2, Smile, Table2, Trash2, X } from 'lucide-react';
+import { AtSign, Users, AlertTriangle, Lightbulb, CheckCircle2, ChevronDown, ChevronRight, CornerDownRight, Crown, Download, ExternalLink, Heart, Loader2, MessageCircle, Network, Pencil, Play, Plus, Repeat2, Search, Settings2, Smile, Table2, Trash2, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { DateRangePicker, type DateRange } from './DateRangePicker';
 import { StatCard } from '../StatCard';
 
 import { type Topic, type Row, type Account, ago, fmt, fmtTime, wibDay, loadTopicRows, loadAccounts, polarity, polarityLabel } from './threadsShared';
 import { SentimentView, ClusterView, InfluenceView, AnalyticsFilters, useScope } from './ThreadsAnalytics';
+import { InsightView } from './ThreadsInsight';
 
 type Run = { id: string; topic_id: string | null; action: string; targets: string[]; trigger: string; status: string; items_count: number | null; error: string | null; started_at: string; finished_at: string | null };
 const FN = `${(import.meta.env.NEXT_PUBLIC_SUPABASE_URL ?? import.meta.env.VITE_SUPABASE_URL ?? '').replace(/\/$/, '')}/functions/v1/threads-monitor`;
@@ -36,7 +37,7 @@ function Heading({ title, action }: { title: string; action?: React.ReactNode })
 }
 
 // ---------- main ----------
-type Tab = 'data' | 'sentiment' | 'cluster' | 'influence' | 'settings';
+type Tab = 'data' | 'insight' | 'sentiment' | 'cluster' | 'influence' | 'settings';
 export function ThreadsMonitor() {
   const isAdmin = useIsSuperAdmin();
   const [tab, setTab] = useState<Tab>('data');
@@ -62,7 +63,7 @@ export function ThreadsMonitor() {
   }, [topicId]);
 
   const tabs: [Tab, string, React.ReactNode][] = [
-    ['data', 'Data', <Table2 size={14} />], ['sentiment', 'Sentiment', <Smile size={14} />], ['cluster', 'Cluster Node', <Network size={14} />], ['influence', 'Top Influence', <Crown size={14} />],
+    ['data', 'Data', <Table2 size={14} />], ['insight', 'Insight', <Lightbulb size={14} />], ['sentiment', 'Sentiment', <Smile size={14} />], ['cluster', 'Cluster Node', <Network size={14} />], ['influence', 'Top Influence', <Crown size={14} />],
     ...(isAdmin ? [['settings', 'Topics & collection', <Settings2 size={14} />] as [Tab, string, React.ReactNode]] : []),
   ];
   const shared = { topics, topicId, setTopicId, range, setRange, rows, error };
@@ -74,6 +75,7 @@ export function ThreadsMonitor() {
       : tab === 'settings' && isAdmin ? <TopicSettings topics={topics} reload={loadTopics} />
       : !topics.length ? <NoTopics isAdmin={isAdmin} goSettings={() => setTab('settings')} />
       : tab === 'data' ? <DataView {...shared} topics={topics} />
+      : tab === 'insight' ? <InsightView topics={topics} topicId={topicId} setTopicId={setTopicId} />
       : <Analytics tab={tab} {...shared} topics={topics} accounts={accounts} />}
   </section>;
 }
